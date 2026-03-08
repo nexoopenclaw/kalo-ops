@@ -514,3 +514,109 @@ alter table public.experiment_events enable row level security;
 --       and m.user_id = auth.uid()
 --     )
 --   );
+
+-- =====================================================
+-- CONTENT ATTRIBUTION + REPORTING (Sprint 10 scaffold)
+-- =====================================================
+create table if not exists public.content_pieces (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  platform text not null check (platform in ('instagram', 'youtube', 'tiktok', 'linkedin', 'x')),
+  content_type text not null check (content_type in ('reel', 'post', 'story', 'video', 'thread', 'newsletter')),
+  hook text not null,
+  angle text,
+  published_at timestamptz,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.content_attributions (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  lead_id uuid not null references public.leads(id) on delete cascade,
+  content_piece_id uuid not null references public.content_pieces(id) on delete cascade,
+  touchpoint text not null default 'first_touch' check (touchpoint in ('first_touch', 'assisted', 'last_touch')),
+  call_booked boolean not null default false,
+  deal_won boolean not null default false,
+  attributed_revenue numeric(12,2) not null default 0,
+  confidence_score numeric(5,2) not null default 1.0,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.reports_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  report_type text not null check (report_type in ('daily_digest', 'weekly_review')),
+  period_label text not null,
+  payload jsonb not null default '{}'::jsonb,
+  generated_by_user_id uuid references auth.users(id),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.alert_configs (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  rule_type text not null check (rule_type in ('vip_no_response', 'show_up_drop', 'inbound_spike', 'backlog')),
+  enabled boolean not null default true,
+  threshold numeric(12,2) not null default 0,
+  rule_window text not null default '24h' check (rule_window in ('1h', '24h', '7d')),
+  recipients jsonb not null default '[]'::jsonb,
+  created_by_user_id uuid references auth.users(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (organization_id, rule_type)
+);
+
+create index if not exists content_pieces_org_published_idx on public.content_pieces (organization_id, published_at desc);
+create index if not exists content_pieces_org_platform_idx on public.content_pieces (organization_id, platform);
+create index if not exists content_attributions_org_piece_idx on public.content_attributions (organization_id, content_piece_id, created_at desc);
+create index if not exists content_attributions_org_lead_idx on public.content_attributions (organization_id, lead_id, created_at desc);
+create index if not exists reports_snapshots_org_type_idx on public.reports_snapshots (organization_id, report_type, created_at desc);
+create index if not exists alert_configs_org_enabled_idx on public.alert_configs (organization_id, enabled, updated_at desc);
+
+alter table public.content_pieces enable row level security;
+alter table public.content_attributions enable row level security;
+alter table public.reports_snapshots enable row level security;
+alter table public.alert_configs enable row level security;
+
+-- content_pieces
+-- create policy content_pieces_org_scope on public.content_pieces
+--   for all using (
+--     exists (
+--       select 1 from public.memberships m
+--       where m.organization_id = content_pieces.organization_id
+--       and m.user_id = auth.uid()
+--     )
+--   );
+
+-- content_attributions
+-- create policy content_attributions_org_scope on public.content_attributions
+--   for all using (
+--     exists (
+--       select 1 from public.memberships m
+--       where m.organization_id = content_attributions.organization_id
+--       and m.user_id = auth.uid()
+--     )
+--   );
+
+-- reports_snapshots
+-- create policy reports_snapshots_org_scope on public.reports_snapshots
+--   for all using (
+--     exists (
+--       select 1 from public.memberships m
+--       where m.organization_id = reports_snapshots.organization_id
+--       and m.user_id = auth.uid()
+--     )
+--   );
+
+-- alert_configs
+-- create policy alert_configs_org_scope on public.alert_configs
+--   for all using (
+--     exists (
+--       select 1 from public.memberships m
+--       where m.organization_id = alert_configs.organization_id
+--       and m.user_id = auth.uid()
+--     )
+--   );

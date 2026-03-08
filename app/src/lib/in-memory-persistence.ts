@@ -67,12 +67,57 @@ export interface ExperimentOutcomeStore {
   createdAt: string;
 }
 
+export interface ContentPieceStore {
+  id: string;
+  organizationId: string;
+  platform: "instagram" | "youtube" | "tiktok" | "linkedin" | "x";
+  type: "reel" | "post" | "story" | "video" | "thread" | "newsletter";
+  hook: string;
+  angle: string;
+  publishedAt: string;
+}
+
+export interface ContentAttributionStore {
+  id: string;
+  organizationId: string;
+  leadId: string;
+  contentPieceId: string;
+  callBooked: boolean;
+  dealWon: boolean;
+  attributedRevenue: number;
+  createdAt: string;
+}
+
+export interface ReportSnapshotStore {
+  id: string;
+  organizationId: string;
+  reportType: "daily_digest" | "weekly_review";
+  periodLabel: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface AlertConfigStore {
+  id: string;
+  organizationId: string;
+  ruleType: "vip_no_response" | "show_up_drop" | "inbound_spike" | "backlog";
+  enabled: boolean;
+  threshold: number;
+  window: "1h" | "24h" | "7d";
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface InMemoryPersistenceState {
   voiceConsents: VoiceConsentRecordStore[];
   voiceAuditEvents: VoiceAuditEventStore[];
   experiments: ExperimentStore[];
   experimentAssignments: ExperimentAssignmentStore[];
   experimentOutcomes: ExperimentOutcomeStore[];
+  contentPieces: ContentPieceStore[];
+  contentAttributions: ContentAttributionStore[];
+  reportSnapshots: ReportSnapshotStore[];
+  alertConfigs: AlertConfigStore[];
 }
 
 const state: InMemoryPersistenceState = {
@@ -81,6 +126,10 @@ const state: InMemoryPersistenceState = {
   experiments: [],
   experimentAssignments: [],
   experimentOutcomes: [],
+  contentPieces: [],
+  contentAttributions: [],
+  reportSnapshots: [],
+  alertConfigs: [],
 };
 
 const globalKey = "__kaloOpsInMemoryState__";

@@ -50,7 +50,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
 
           <div className="mt-auto rounded-xl border border-[#d4e83a]/25 bg-[#d4e83a]/10 p-3 text-xs text-zinc-200">
-            Sprint 8 Scaffold • Voice Notes + A/B Testing
+            Sprint 10 Foundation • Attribution + Reporting
           </div>
         </aside>
 
