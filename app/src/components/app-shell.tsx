@@ -10,6 +10,7 @@ const navItems = [
   { href: "/crm", label: "CRM" },
   { href: "/automations", label: "Automations" },
   { href: "/copilot", label: "Copilot" },
+  { href: "/voice-lab", label: "Voice Lab" },
   { href: "/attribution", label: "Attribution" },
   { href: "/reportes", label: "Reportes" },
   { href: "/config", label: "Config" },
@@ -48,7 +49,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
 
           <div className="mt-auto rounded-xl border border-[#d4e83a]/25 bg-[#d4e83a]/10 p-3 text-xs text-zinc-200">
-            Sprint 3 Scaffold • CRM Core + Deals Pipeline MVP
+            Sprint 8 Scaffold • Voice Notes + A/B Testing
           </div>
         </aside>
 

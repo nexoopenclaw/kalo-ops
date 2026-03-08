@@ -410,3 +410,107 @@ alter table public.ai_interaction_events enable row level security;
 --   );
 
 -- Optional trigger pattern: keep updated_at fresh via trigger before update.
+
+-- =====================================================
+-- VOICE NOTES + A/B TESTING (Sprint 8 scaffold)
+-- =====================================================
+create table if not exists public.voice_consents (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  lead_id uuid not null references public.leads(id) on delete cascade,
+  actor_user_id uuid references auth.users(id),
+  status text not null check (status in ('granted', 'revoked')),
+  reason text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.voice_notes_audit (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  lead_id uuid not null references public.leads(id) on delete cascade,
+  conversation_id uuid references public.conversations(id) on delete set null,
+  actor_user_id uuid references auth.users(id),
+  voice_model_id text not null,
+  source_text_hash text not null,
+  preview_id text,
+  provider text not null default 'mock',
+  provider_message_id text,
+  status text not null default 'sent' check (status in ('queued', 'sent', 'failed')),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.experiments (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  actor_user_id uuid references auth.users(id),
+  name text not null,
+  traffic_split_a int not null default 50 check (traffic_split_a between 5 and 95),
+  variant_a jsonb not null,
+  variant_b jsonb not null,
+  status text not null default 'active' check (status in ('active', 'paused', 'completed')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.experiment_events (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  experiment_id uuid not null references public.experiments(id) on delete cascade,
+  variant text not null check (variant in ('A', 'B')),
+  event_type text not null check (event_type in ('impression', 'reply', 'conversion')),
+  weight int not null default 1 check (weight > 0),
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists voice_consents_org_lead_created_idx on public.voice_consents (organization_id, lead_id, created_at desc);
+create index if not exists voice_notes_audit_org_created_idx on public.voice_notes_audit (organization_id, created_at desc);
+create index if not exists voice_notes_audit_lead_created_idx on public.voice_notes_audit (lead_id, created_at desc);
+create index if not exists experiments_org_status_created_idx on public.experiments (organization_id, status, created_at desc);
+create index if not exists experiment_events_experiment_variant_idx on public.experiment_events (experiment_id, variant, created_at desc);
+create index if not exists experiment_events_org_type_created_idx on public.experiment_events (organization_id, event_type, created_at desc);
+
+alter table public.voice_consents enable row level security;
+alter table public.voice_notes_audit enable row level security;
+alter table public.experiments enable row level security;
+alter table public.experiment_events enable row level security;
+
+-- voice_consents
+-- create policy voice_consents_org_scope on public.voice_consents
+--   for all using (
+--     exists (
+--       select 1 from public.memberships m
+--       where m.organization_id = voice_consents.organization_id
+--       and m.user_id = auth.uid()
+--     )
+--   );
+
+-- voice_notes_audit
+-- create policy voice_notes_audit_org_scope on public.voice_notes_audit
+--   for all using (
+--     exists (
+--       select 1 from public.memberships m
+--       where m.organization_id = voice_notes_audit.organization_id
+--       and m.user_id = auth.uid()
+--     )
+--   );
+
+-- experiments
+-- create policy experiments_org_scope on public.experiments
+--   for all using (
+--     exists (
+--       select 1 from public.memberships m
+--       where m.organization_id = experiments.organization_id
+--       and m.user_id = auth.uid()
+--     )
+--   );
+
+-- experiment_events
+-- create policy experiment_events_org_scope on public.experiment_events
+--   for all using (
+--     exists (
+--       select 1 from public.memberships m
+--       where m.organization_id = experiment_events.organization_id
+--       and m.user_id = auth.uid()
+--     )
+--   );
