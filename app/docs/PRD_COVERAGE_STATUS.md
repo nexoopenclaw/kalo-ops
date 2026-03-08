@@ -1,16 +1,30 @@
-# PRD Coverage Status · Sprint 14
+# PRD Coverage Status (Light Audit)
 
-| PRD Area | Status | Evidence (route/file/api) | Next action |
+Source audited: `../docs/KALO-OPS-PRD-v1.md` vs local code in `app/` only.
+
+| Area | Status | Evidence | Next |
 |---|---|---|---|
-| Foundation (auth + setup) | Partial | `/auth/login`, `/auth/register`, `src/lib/supabase/*` | Cerrar onboarding real con membership/roles persistidos en Supabase + RLS activo. |
-| Unified Inbox + Setter OS | Partial | `/inbox`, `src/components/inbox/inbox-workspace.tsx`, `/api/messages/send`, `/api/leads/*` | Conectar inbox a Meta Graph real + realtime + asignación round-robin persistida. |
-| CRM + Pipeline ventas | Partial | `/crm`, `src/lib/crm-service.ts`, `/api/deals/update-stage`, `/api/analytics/funnel-summary` | Implementar Kanban drag&drop persistido + integración Stripe webhook a `won`. |
-| Pipeline risk automation + alerting | **Done (Sprint 14)** | `/hoy`, `src/lib/risk-automation-service.ts`, `/api/risk/cockpit`, `/api/risk/scan`, `/api/risk/workflows/toggle` | Persistir escaneos/alertas en Supabase (`risk_alert_events`, `risk_workflow_states`) y programar cron horario. |
-| Automation engine base | Partial | `/automations`, `src/lib/automation-service.ts`, `/api/automations/*` | Pasar de mock in-memory a execution engine real con logs y dispatch por canal. |
-| AI Copilot | Partial | `/copilot`, `src/lib/copilot-service.ts`, `/api/copilot/*` | Integrar proveedor LLM real con telemetría de latencia y feedback loop. |
-| Voice notes + compliance | Partial | `/voice-lab`, `src/lib/voice-service.ts`, `/api/voice/*` | Integrar proveedor TTS real y auditoría inmutable en DB. |
-| Content Attribution | Partial | `/attribution`, `src/lib/attribution-service.ts`, `/api/attribution/*` | Mapear origen real DM→pieza con metadata de Instagram y touchpoints multi-canal. |
-| Executive reporting (daily/weekly + exports) | Partial | `/reportes`, `/api/reports/daily-preview`, `/api/reports/weekly-preview`, `/api/reports/alerts/upsert` | Añadir generación programada + delivery real (email/slack/whatsapp) + export PDF/CSV funcional. |
-| Multicanal + webhook reliability | Partial | `/ops`, `/webhooks`, `/api/channels/*`, `/api/webhooks/*`, `docs/SPRINT_11_MULTICHANNEL.md`, `docs/SPRINT_12_WEBHOOK_RELIABILITY.md` | Completar adapters productivos Instagram/WhatsApp/email + reintentos con cola persistida. |
-| Onboarding + customer health | Done | `/onboarding`, `/health`, `src/lib/onboarding-service.ts`, `src/lib/health-service.ts`, `/api/onboarding/*`, `/api/health/*` | Persistencia Supabase + snapshots diarios + filtros de escala. |
-| Scale ecosystem (Meta Ads/HubSpot/API pública/marketplace) | Missing | PRD Fase 5 sin rutas ni APIs de integración enterprise | Priorizar API pública + outbound webhooks para integraciones n8n/Make. |
+| Foundation: Next.js + Supabase scaffold | Partial | `package.json`, `src/lib/supabase/*`, `db/schema.sql` | Wire prod Supabase env + run migrations in shared envs.
+| RF-001 Auth + org roles | Partial | `src/app/auth/login/page.tsx`, `src/app/auth/register/page.tsx`, tables `organizations/profiles/memberships` | Enforce role guards in UI/API and complete invite flow.
+| Multi-tenant + data model breadth | Partial | `db/schema.sql` includes org-scoped tables across inbox/CRM/automation/reporting | Replace remaining mock-state reads with DB-backed queries.
+| Security (RLS/policies) | Partial | `db/schema.sql` enables RLS on many tables but most policies are commented stubs | Implement + test RLS policies per table before prod.
+| Unified Inbox UI | Partial | `src/app/(app)/inbox/page.tsx`, `src/components/inbox/inbox-workspace.tsx` | Connect to realtime persisted conversations/messages.
+| Inbox messaging API | Partial | `src/app/api/messages/send/route.ts`, `src/app/api/leads/*` | Add attachments/media + error handling per provider.
+| Channel adapters (IG/WA/Email) | Partial | `src/lib/channel-adapters/*` | Replace TODO/mock adapters with provider SDK flows.
+| Meta webhook ingestion | Partial | `src/app/api/webhooks/meta/route.ts`, `src/lib/webhook-engine.ts` | Map real tenant IDs + strengthen signature/idempotency checks.
+| CRM + pipeline core | Partial | `src/app/(app)/crm/page.tsx`, `src/lib/crm-service.ts`, `/api/deals/*` | Add Kanban DnD persistence and stage transition rules.
+| Deal history + objections model | Partial | `db/schema.sql` tables `deal_stage_history`, `deal_objections` | Expose full UI + reporting filters from these tables.
+| Calendly booking integration (MVP req) | Missing | No Calendly route/adapter found in `src/app/api` or `src/lib` | Add booking webhook + auto-stage to `booked`.
+| Stripe payment close-won (MVP req) | Missing | No Stripe webhook/adapter found | Add Stripe webhook to mark deals `won` and update revenue.
+| Automation engine | Partial | `src/app/(app)/automations/page.tsx`, `/api/automations/*`, tables `automations/automation_logs` | Add background executor + persisted run logs.
+| AI Copilot | Partial | `src/app/(app)/copilot/page.tsx`, `/api/copilot/*`, table `ai_interactions` | Integrate real LLM provider + latency/feedback telemetry.
+| Voice notes + compliance | Partial | `src/app/(app)/voice-lab/page.tsx`, `/api/voice/*`, tables `voice_consents/voice_notes_audit` | Connect real TTS provider + immutable audit storage.
+| A/B testing | Partial | `/api/experiments/*`, tables `experiments/experiment_events` | Add statistical significance and winner promotion flow.
+| Content attribution | Partial | `src/app/(app)/attribution/page.tsx`, `/api/attribution/*`, tables `content_*` | Implement real IG post/story linkage to inbound DMs.
+| Reporting + alerts | Partial | `src/app/(app)/reportes/page.tsx`, `/api/reports/*`, table `reports_snapshots/alert_configs` | Schedule delivery (email/slack/wa) + exports PDF/CSV.
+| Webhook reliability | Partial | `src/app/(app)/webhooks/page.tsx`, `/api/webhooks/*`, tables `webhook_events/dead_letter_events` | Add queue worker/cron retry loop + SLO dashboards.
+| Onboarding + health | Partial | `src/app/(app)/onboarding`, `src/app/(app)/health`, `/api/onboarding/*`, `/api/health/*` | Persist all actions to Supabase; remove in-memory fallback.
+| Pipeline risk automation (Sprint 14) | Partial | `src/app/(app)/hoy/page.tsx`, `/api/risk/*`, `src/lib/risk-automation-service.ts`, risk tables in schema | Run scheduled scans and persist event lifecycle.
+| Daily MVP acceptance readiness | Partial | Major blocks present; critical gaps remain (Calendly/Stripe/realtime prod adapters) | Close MVP blockers first, then harden reliability + compliance.
+
+Legend: **Done** = production-complete in local code, **Partial** = scaffold/prototype exists, **Missing** = no concrete implementation found.
