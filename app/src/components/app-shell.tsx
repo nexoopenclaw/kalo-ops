@@ -18,6 +18,7 @@ const navItems = [
   { href: "/onboarding", label: "Onboarding" },
   { href: "/health", label: "Health" },
   { href: "/webhooks", label: "Webhooks" },
+  { href: "/integraciones", label: "Integraciones" },
   { href: "/config", label: "Config" },
   { href: "/qa", label: "QA" },
 ];

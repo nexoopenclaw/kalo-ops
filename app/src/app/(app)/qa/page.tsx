@@ -6,6 +6,7 @@ const checks = [
   { module: "API cockpit", status: "PASS", detail: "GET /api/hoy/summary devuelve payload único para UI y refresco en cliente." },
   { module: "Paneles críticos", status: "PASS", detail: "Incluye prioridades, SLA urgente, deals en riesgo, estado experimentos/automations y alertas top." },
   { module: "Quick actions operativas", status: "PASS", detail: "Bloque de acciones rápidas enlazadas a Inbox, CRM, Automations, Webhooks y QA." },
+  { module: "Keys-ready architecture", status: "PASS", detail: "Config centralizada, adapters de proveedores y endpoints de diagnóstico activos." },
   { module: "UX premium dark", status: "PASS", detail: "Visual dark consistente con acento #d4e83a y copy operacional en español." },
 ];
 
@@ -29,6 +30,24 @@ export default function QAPage() {
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="card p-4 text-sm">
+        <h2 className="text-lg font-semibold">Bloque de aceptación · Keys-ready</h2>
+        <ol className="mt-3 list-decimal space-y-2 pl-5 text-zinc-300">
+          <li>
+            Ir a <Link href="/integraciones" className="text-[#d4e83a] underline">/integraciones</Link> y validar estado por proveedor (Configurado/Missing).
+          </li>
+          <li>
+            GET <code>/api/integrations/status</code> debe devolver lista completa de proveedores y <code>missingKeys</code> sin exponer secretos.
+          </li>
+          <li>
+            POST <code>/api/integrations/test/:provider</code> debe responder <code>ok=true</code> con <code>status=ok</code> o <code>status=not_configured</code> de forma graceful.
+          </li>
+          <li>
+            Revisar <code>docs/GO_LIVE_KEYS_CHECKLIST.md</code> para checklist de carga en Vercel + Supabase y smoke tests iniciales.
+          </li>
+        </ol>
       </section>
 
       <section className="card p-4 text-sm">
