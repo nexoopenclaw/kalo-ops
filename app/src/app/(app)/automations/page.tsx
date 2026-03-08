@@ -1,8 +1,8 @@
-export default function AutomationsPage() {
-  return (
-    <main className="card p-6">
-      <h1 className="text-2xl font-semibold">Automations</h1>
-      <p className="mt-2 text-zinc-400">Reglas, secuencias y triggers para operaciones de ventas. (Scaffold Sprint 1)</p>
-    </main>
-  );
+import { AutomationWorkspace } from "@/components/automations/automation-workspace";
+import { automationService } from "@/lib/automation-service";
+
+export default async function AutomationsPage() {
+  const workflows = await automationService.list("org_1");
+
+  return <AutomationWorkspace initialWorkflows={workflows} />;
 }

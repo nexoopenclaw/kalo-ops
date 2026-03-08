@@ -287,4 +287,64 @@ alter table public.deal_objections enable row level security;
 --     )
 --   );
 
+-- =====================================================
+-- AUTOMATIONS ENGINE (Sprint 6 scaffold)
+-- =====================================================
+create table if not exists public.automations (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null,
+  description text,
+  trigger_type text not null check (trigger_type in ('silence', 'keyword', 'stage_change', 'booking', 'payment')),
+  trigger_config jsonb not null default '{}'::jsonb,
+  conditions jsonb not null default '[]'::jsonb,
+  actions jsonb not null default '[]'::jsonb,
+  active boolean not null default true,
+  execution_count int not null default 0,
+  last_run_at timestamptz,
+  created_by_user_id uuid references auth.users(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.automation_logs (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  automation_id uuid not null references public.automations(id) on delete cascade,
+  status text not null check (status in ('success', 'failed', 'skipped')),
+  summary text,
+  input_payload jsonb not null default '{}'::jsonb,
+  output_payload jsonb not null default '{}'::jsonb,
+  started_at timestamptz not null default now(),
+  finished_at timestamptz
+);
+
+create index if not exists automations_org_active_idx on public.automations (organization_id, active);
+create index if not exists automations_org_updated_idx on public.automations (organization_id, updated_at desc);
+create index if not exists automation_logs_org_started_idx on public.automation_logs (organization_id, started_at desc);
+create index if not exists automation_logs_automation_started_idx on public.automation_logs (automation_id, started_at desc);
+
+alter table public.automations enable row level security;
+alter table public.automation_logs enable row level security;
+
+-- automations
+-- create policy automations_org_scope on public.automations
+--   for all using (
+--     exists (
+--       select 1 from public.memberships m
+--       where m.organization_id = automations.organization_id
+--       and m.user_id = auth.uid()
+--     )
+--   );
+
+-- automation_logs
+-- create policy automation_logs_org_scope on public.automation_logs
+--   for all using (
+--     exists (
+--       select 1 from public.memberships m
+--       where m.organization_id = automation_logs.organization_id
+--       and m.user_id = auth.uid()
+--     )
+--   );
+
 -- Optional trigger pattern: keep updated_at fresh via trigger before update.
