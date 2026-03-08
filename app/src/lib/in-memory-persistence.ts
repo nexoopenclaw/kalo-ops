@@ -144,6 +144,38 @@ export interface DeadLetterEventStore {
   createdAt: string;
 }
 
+export interface OnboardingStateStore {
+  organizationId: string;
+  completedTaskKeys: Array<"connect_channel" | "create_pipeline" | "import_leads" | "activate_automation" | "configure_alerts">;
+  completedAt: string | null;
+  updatedAt: string;
+}
+
+export interface CustomerHealthSnapshotStore {
+  id: string;
+  organizationId: string;
+  name: string;
+  segment: string;
+  adoptionScore: number;
+  activityScore: number;
+  conversionTrend: number;
+  riskLevel: "green" | "yellow" | "red";
+  reasons: string[];
+  suggestedActions: string[];
+  mrrUsd: number;
+  lastActivityAt: string;
+}
+
+export interface HealthActionLogStore {
+  id: string;
+  organizationId: string;
+  orgId: string;
+  actionLabel: string;
+  owner: string;
+  note?: string;
+  createdAt: string;
+}
+
 export interface InMemoryPersistenceState {
   voiceConsents: VoiceConsentRecordStore[];
   voiceAuditEvents: VoiceAuditEventStore[];
@@ -156,6 +188,9 @@ export interface InMemoryPersistenceState {
   alertConfigs: AlertConfigStore[];
   webhookEvents: WebhookEventStore[];
   deadLetterEvents: DeadLetterEventStore[];
+  onboardingStates: OnboardingStateStore[];
+  customerHealthSnapshots: CustomerHealthSnapshotStore[];
+  healthActionsLog: HealthActionLogStore[];
 }
 
 const state: InMemoryPersistenceState = {
@@ -170,6 +205,9 @@ const state: InMemoryPersistenceState = {
   alertConfigs: [],
   webhookEvents: [],
   deadLetterEvents: [],
+  onboardingStates: [],
+  customerHealthSnapshots: [],
+  healthActionsLog: [],
 };
 
 const globalKey = "__kaloOpsInMemoryState__";

@@ -14,6 +14,8 @@ const navItems = [
   { href: "/attribution", label: "Attribution" },
   { href: "/reportes", label: "Reportes" },
   { href: "/ops", label: "Ops" },
+  { href: "/onboarding", label: "Onboarding" },
+  { href: "/health", label: "Health" },
   { href: "/webhooks", label: "Webhooks" },
   { href: "/config", label: "Config" },
   { href: "/qa", label: "QA" },
@@ -52,7 +54,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
 
           <div className="mt-auto rounded-xl border border-[#d4e83a]/25 bg-[#d4e83a]/10 p-3 text-xs text-zinc-200">
-            Sprint 12 Reliability • Webhooks + Ops
+            Sprint 13 Scale • Onboarding + Health + Retention Ops
           </div>
         </aside>
 

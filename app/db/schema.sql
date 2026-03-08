@@ -757,3 +757,88 @@ alter table public.dead_letter_events enable row level security;
 --       and m.user_id = auth.uid()
 --     )
 --   );
+
+-- =====================================================
+-- ONBOARDING + CUSTOMER HEALTH + RETENTION OPS (Sprint 13 scaffold)
+-- =====================================================
+create table if not exists public.onboarding_states (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  completed_task_keys text[] not null default '{}',
+  progress_percent int not null default 0 check (progress_percent between 0 and 100),
+  completed_at timestamptz,
+  updated_by_user_id uuid references auth.users(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (organization_id)
+);
+
+create table if not exists public.customer_health_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  tenant_account_id text not null,
+  tenant_account_name text not null,
+  segment text,
+  adoption_score int not null default 0 check (adoption_score between 0 and 100),
+  activity_score int not null default 0 check (activity_score between 0 and 100),
+  conversion_trend numeric(6,2) not null default 0,
+  risk_level text not null check (risk_level in ('green', 'yellow', 'red')),
+  reasons jsonb not null default '[]'::jsonb,
+  suggested_actions jsonb not null default '[]'::jsonb,
+  mrr_usd numeric(12,2) not null default 0,
+  snapshot_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.health_actions_log (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  tenant_account_id text not null,
+  action_label text not null,
+  owner_label text not null,
+  note text,
+  status text not null default 'queued' check (status in ('queued', 'in_progress', 'done', 'dismissed')),
+  created_by_user_id uuid references auth.users(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists onboarding_states_org_updated_idx on public.onboarding_states (organization_id, updated_at desc);
+create index if not exists customer_health_snapshots_org_snapshot_idx on public.customer_health_snapshots (organization_id, snapshot_at desc);
+create index if not exists customer_health_snapshots_org_risk_idx on public.customer_health_snapshots (organization_id, risk_level, snapshot_at desc);
+create index if not exists health_actions_log_org_created_idx on public.health_actions_log (organization_id, created_at desc);
+create index if not exists health_actions_log_org_status_idx on public.health_actions_log (organization_id, status, updated_at desc);
+
+alter table public.onboarding_states enable row level security;
+alter table public.customer_health_snapshots enable row level security;
+alter table public.health_actions_log enable row level security;
+
+-- onboarding_states
+-- create policy onboarding_states_org_scope on public.onboarding_states
+--   for all using (
+--     exists (
+--       select 1 from public.memberships m
+--       where m.organization_id = onboarding_states.organization_id
+--       and m.user_id = auth.uid()
+--     )
+--   );
+
+-- customer_health_snapshots
+-- create policy customer_health_snapshots_org_scope on public.customer_health_snapshots
+--   for all using (
+--     exists (
+--       select 1 from public.memberships m
+--       where m.organization_id = customer_health_snapshots.organization_id
+--       and m.user_id = auth.uid()
+--     )
+--   );
+
+-- health_actions_log
+-- create policy health_actions_log_org_scope on public.health_actions_log
+--   for all using (
+--     exists (
+--       select 1 from public.memberships m
+--       where m.organization_id = health_actions_log.organization_id
+--       and m.user_id = auth.uid()
+--     )
+--   );
