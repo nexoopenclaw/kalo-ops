@@ -1,21 +1,20 @@
 import Link from "next/link";
 
 const checks = [
-  { module: "Onboarding workspace", status: "PASS", detail: "Ruta /onboarding con checklist guiado, barra de progreso, ETA y quick-start dinámico." },
-  { module: "Persistencia onboarding", status: "PASS", detail: "Estado de completado por tarea persistido en memoria compartida vía onboarding-service." },
-  { module: "Customer Health dashboard", status: "PASS", detail: "Ruta /health con cards de adoption/activity/conversion/risk + tabla de cuentas." },
-  { module: "Drilldown y acciones", status: "PASS", detail: "Drawer/panel de detalle por org con razones de riesgo y acciones sugeridas registrables." },
-  { module: "APIs Sprint 13", status: "PASS", detail: "Endpoints /api/onboarding/state, /check, /api/health/summary, /orgs y /action con schema consistente." },
-  { module: "Schema extension", status: "PASS", detail: "Tablas onboarding_states, customer_health_snapshots y health_actions_log con índices + stubs RLS." },
-  { module: "UX premium dark", status: "PASS", detail: "Sistema dark consistente + acento #d4e83a y copy operativo en español." },
+  { module: "Hoy Command Center", status: "PASS", detail: "Ruta /hoy con cockpit operativo de riesgo, KPIs y recomendaciones accionables." },
+  { module: "Pipeline risk scan", status: "PASS", detail: "POST /api/risk/scan evalúa deals en riesgo desde CRM y genera alertas de rescate." },
+  { module: "Workflows de rescate", status: "PASS", detail: "Activación/pausa de workflows vía /api/risk/workflows/toggle con estado visible en UI." },
+  { module: "Vinculación módulos", status: "PASS", detail: "Risk engine consume CRM funnel summary + alert configs + simulation de automation engine." },
+  { module: "Persistencia scaffold", status: "PASS", detail: "Schema SQL extendido con tablas risk_alert_events y risk_workflow_states + índices/RLS stubs." },
+  { module: "UX premium dark", status: "PASS", detail: "Diseño dark consistente con acento #d4e83a y copy operativo en español." },
 ];
 
 export default function QAPage() {
   return (
     <main className="space-y-4">
       <section className="card p-4">
-        <h1 className="text-2xl font-semibold">QA interno · Sprint 13</h1>
-        <p className="text-sm text-zinc-400">Checklist de onboarding + customer health + retention ops antes de deploy.</p>
+        <h1 className="text-2xl font-semibold">QA interno · Sprint 14</h1>
+        <p className="text-sm text-zinc-400">Checklist de pipeline risk automation + alerting workflows antes de deploy.</p>
       </section>
 
       <section className="card p-4">
@@ -36,22 +35,19 @@ export default function QAPage() {
         <h2 className="text-lg font-semibold">Pruebas manuales rápidas</h2>
         <ol className="mt-3 list-decimal space-y-2 pl-5 text-zinc-300">
           <li>
-            Ir a <Link href="/onboarding" className="text-[#d4e83a] underline">/onboarding</Link> y marcar/desmarcar tareas; validar que progreso, ETA y quick-start se actualizan en tiempo real.
+            Ir a <Link href="/hoy" className="text-[#d4e83a] underline">/hoy</Link> y validar KPIs de riesgo + deals críticos + workflows de rescate.
           </li>
           <li>
-            GET <code>/api/onboarding/state</code> debe responder <code>{`{ ok: true, data: { state, tasks, progress } }`}</code>.
+            Click en <strong>Ejecutar scan ahora</strong>; verificar resumen de ejecución y generación de alertas recientes.
           </li>
           <li>
-            POST <code>/api/onboarding/check</code> con <code>{`{ taskKey, checked }`}</code> debe persistir estado y devolver progreso recalculado.
+            POST <code>/api/risk/scan</code> debe responder <code>{`{ ok: true, data: { scannedDeals, triggeredWorkflows, generatedAlerts } }`}</code>.
           </li>
           <li>
-            Ir a <Link href="/health" className="text-[#d4e83a] underline">/health</Link> y validar cards de score/riesgo + tabla de organizaciones con razones visibles.
+            Alternar un workflow en UI; POST <code>/api/risk/workflows/toggle</code> debe reflejar cambio Activo/Inactivo.
           </li>
           <li>
-            Seleccionar una org y ejecutar una acción sugerida; POST <code>/api/health/action</code> debe devolver <code>{`{ ok: true, data }`}</code> status 201.
-          </li>
-          <li>
-            GET <code>/api/health/summary</code> y <code>/api/health/orgs</code> deben reflejar portfolio mock con risk-level green/yellow/red.
+            GET <code>/api/risk/cockpit</code> debe devolver snapshot de cockpit con <code>totals</code>, <code>dealsAtRisk</code>, <code>workflows</code> y <code>recentAlerts</code>.
           </li>
         </ol>
       </section>

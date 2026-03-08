@@ -842,3 +842,58 @@ alter table public.health_actions_log enable row level security;
 --       and m.user_id = auth.uid()
 --     )
 --   );
+
+-- =====================================================
+-- PIPELINE RISK AUTOMATION + ALERTING (Sprint 14 scaffold)
+-- =====================================================
+create table if not exists public.risk_alert_events (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  deal_id uuid references public.deals(id) on delete set null,
+  severity text not null check (severity in ('low', 'medium', 'high')),
+  title text not null,
+  detail text not null,
+  source text not null default 'risk_scan' check (source in ('risk_scan', 'manual')),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.risk_workflow_states (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  workflow_key text not null,
+  name text not null,
+  enabled boolean not null default true,
+  threshold_days int not null default 3 check (threshold_days >= 1),
+  action_label text not null,
+  last_triggered_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (organization_id, workflow_key)
+);
+
+create index if not exists risk_alert_events_org_created_idx on public.risk_alert_events (organization_id, created_at desc);
+create index if not exists risk_alert_events_org_severity_idx on public.risk_alert_events (organization_id, severity, created_at desc);
+create index if not exists risk_workflow_states_org_enabled_idx on public.risk_workflow_states (organization_id, enabled, updated_at desc);
+
+alter table public.risk_alert_events enable row level security;
+alter table public.risk_workflow_states enable row level security;
+
+-- risk_alert_events
+-- create policy risk_alert_events_org_scope on public.risk_alert_events
+--   for all using (
+--     exists (
+--       select 1 from public.memberships m
+--       where m.organization_id = risk_alert_events.organization_id
+--       and m.user_id = auth.uid()
+--     )
+--   );
+
+-- risk_workflow_states
+-- create policy risk_workflow_states_org_scope on public.risk_workflow_states
+--   for all using (
+--     exists (
+--       select 1 from public.memberships m
+--       where m.organization_id = risk_workflow_states.organization_id
+--       and m.user_id = auth.uid()
+--     )
+--   );

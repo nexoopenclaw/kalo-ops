@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 const navItems = [
+  { href: "/hoy", label: "Hoy" },
   { href: "/dashboard", label: "Dashboard" },
   { href: "/inbox", label: "Inbox" },
   { href: "/crm", label: "CRM" },
@@ -54,7 +55,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
 
           <div className="mt-auto rounded-xl border border-[#d4e83a]/25 bg-[#d4e83a]/10 p-3 text-xs text-zinc-200">
-            Sprint 13 Scale • Onboarding + Health + Retention Ops
+Sprint 14 Scale • Riesgo de pipeline + alertas automáticas
           </div>
         </aside>
 
