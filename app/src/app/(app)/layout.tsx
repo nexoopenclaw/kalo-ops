@@ -8,7 +8,7 @@ export default function ProtectedLayout({ children }: { children: ReactNode }) {
       <header className="mb-4 flex items-center justify-between rounded-2xl border border-white/10 bg-[#0e1420]/90 px-5 py-4">
         <div>
           <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">Workspace</p>
-          <h2 className="text-lg font-semibold text-white">Kalo Ops · Sprint 10</h2>
+          <h2 className="text-lg font-semibold text-white">Kalo Ops · Sprint 11</h2>
         </div>
 
         <div className="flex items-center gap-2 text-sm">

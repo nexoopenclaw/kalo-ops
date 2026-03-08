@@ -13,6 +13,7 @@ const navItems = [
   { href: "/voice-lab", label: "Voice Lab" },
   { href: "/attribution", label: "Attribution" },
   { href: "/reportes", label: "Reportes" },
+  { href: "/ops", label: "Ops" },
   { href: "/config", label: "Config" },
   { href: "/qa", label: "QA" },
 ];
@@ -50,7 +51,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
 
           <div className="mt-auto rounded-xl border border-[#d4e83a]/25 bg-[#d4e83a]/10 p-3 text-xs text-zinc-200">
-            Sprint 10 Foundation • Attribution + Reporting
+            Sprint 11 Foundation • Multicanal + Ops
           </div>
         </aside>
 

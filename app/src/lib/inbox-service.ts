@@ -1,8 +1,10 @@
 export type Channel = "instagram" | "whatsapp" | "email" | "webchat" | "other";
 
 export type ConversationStatus = "new" | "active" | "waiting_setter" | "waiting_lead" | "won" | "lost";
+export type PipelineStage = "nuevo" | "calificado" | "propuesta" | "cierre" | "ganado" | "perdido";
 
 export type MessageDirection = "inbound" | "outbound" | "system";
+export type MessageType = "text" | "voice" | "image" | "system";
 
 export interface InboxConversation {
   id: string;
@@ -11,6 +13,8 @@ export interface InboxConversation {
   leadName: string;
   channel: Channel;
   status: ConversationStatus;
+  stage: PipelineStage;
+  ownerName: string | null;
   assignedSetterId: string | null;
   assignedSetterName: string | null;
   unreadCount: number;
@@ -26,6 +30,8 @@ export interface InboxMessage {
   organizationId: string;
   conversationId: string;
   direction: MessageDirection;
+  messageType: MessageType;
+  sourceChannel: Channel;
   body: string;
   sentAt: string;
   senderLabel: string;
@@ -34,6 +40,7 @@ export interface InboxMessage {
 export interface InboxFilters {
   status?: ConversationStatus | "all";
   setter?: string | "all";
+  channel?: Channel | "all";
   noReply?: boolean;
 }
 
@@ -62,6 +69,8 @@ const seedConversations: InboxConversation[] = [
     leadName: "Martina Varela",
     channel: "instagram",
     status: "active",
+    stage: "calificado",
+    ownerName: "Nuria",
     assignedSetterId: "set_1",
     assignedSetterName: "Nuria",
     unreadCount: 2,
@@ -78,6 +87,8 @@ const seedConversations: InboxConversation[] = [
     leadName: "Diego Rojas",
     channel: "whatsapp",
     status: "waiting_setter",
+    stage: "propuesta",
+    ownerName: "Aitana",
     assignedSetterId: "set_2",
     assignedSetterName: "Aitana",
     unreadCount: 0,
@@ -94,6 +105,8 @@ const seedConversations: InboxConversation[] = [
     leadName: "Sofía Team",
     channel: "email",
     status: "won",
+    stage: "ganado",
+    ownerName: "Nuria",
     assignedSetterId: "set_1",
     assignedSetterName: "Nuria",
     unreadCount: 1,
@@ -111,6 +124,8 @@ const seedMessages: InboxMessage[] = [
     organizationId: "org_1",
     conversationId: "conv_1",
     direction: "inbound",
+    messageType: "text",
+    sourceChannel: "instagram",
     body: "Hola Kalo, ¿tenéis hueco este mes?",
     sentAt: "18:02",
     senderLabel: "Lead",
@@ -120,6 +135,8 @@ const seedMessages: InboxMessage[] = [
     organizationId: "org_1",
     conversationId: "conv_1",
     direction: "outbound",
+    messageType: "voice",
+    sourceChannel: "instagram",
     body: "Sí, tenemos dos slots. ¿Qué objetivo quieres priorizar?",
     sentAt: "18:04",
     senderLabel: "Setter",
@@ -129,8 +146,32 @@ const seedMessages: InboxMessage[] = [
     organizationId: "org_1",
     conversationId: "conv_1",
     direction: "inbound",
-    body: "Cerrar 5 clientes high-ticket en 90 días.",
+    messageType: "image",
+    sourceChannel: "instagram",
+    body: "Te paso captura de métricas actuales para contexto.",
     sentAt: "18:05",
+    senderLabel: "Lead",
+  },
+  {
+    id: "msg_4",
+    organizationId: "org_1",
+    conversationId: "conv_2",
+    direction: "system",
+    messageType: "system",
+    sourceChannel: "whatsapp",
+    body: "Automatización: lead marcado como follow-up urgente por SLA.",
+    sentAt: "17:49",
+    senderLabel: "Sistema",
+  },
+  {
+    id: "msg_5",
+    organizationId: "org_1",
+    conversationId: "conv_3",
+    direction: "inbound",
+    messageType: "text",
+    sourceChannel: "email",
+    body: "Confirmado, transferencia emitida. Quedo pendiente de onboarding.",
+    sentAt: "16:50",
     senderLabel: "Lead",
   },
 ];
@@ -142,6 +183,10 @@ function applyFilters(conversations: InboxConversation[], filters: InboxFilters)
     }
 
     if (filters.setter && filters.setter !== "all" && conversation.assignedSetterId !== filters.setter) {
+      return false;
+    }
+
+    if (filters.channel && filters.channel !== "all" && conversation.channel !== filters.channel) {
       return false;
     }
 
@@ -181,12 +226,14 @@ export const inboxService = {
       organizationId: input.organizationId,
       conversationId: input.conversationId,
       direction: "outbound",
+      messageType: "text",
+      sourceChannel: input.channel,
       body: input.body,
       sentAt: new Date().toISOString(),
       senderLabel: "Setter",
     };
 
-    // TODO(Meta Graph API): dispatch message to WhatsApp/Instagram endpoint using access token + phone_number_id/page_id.
+    // TODO(Meta/Email SDK): dispatch message to WhatsApp/Instagram/Email provider endpoint using credentials.
     // TODO(Supabase): persist sent message in `public.messages` and update conversation unread/sla timestamps in a transaction.
 
     return {

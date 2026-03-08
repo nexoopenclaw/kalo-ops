@@ -3,8 +3,18 @@ import { inboxService } from "@/lib/inbox-service";
 
 export default async function InboxPage() {
   const [conversations, setters] = await Promise.all([inboxService.listConversations(), inboxService.listSetters()]);
-  const firstConversationId = conversations[0]?.id;
-  const thread = firstConversationId ? await inboxService.getThread(firstConversationId) : [];
 
-  return <InboxWorkspace initialConversations={conversations} initialThread={thread} setters={setters} />;
+  const messagesByConversationEntries = await Promise.all(
+    conversations.map(async (conversation) => [conversation.id, await inboxService.getThread(conversation.id)] as const),
+  );
+
+  const initialMessagesByConversation = Object.fromEntries(messagesByConversationEntries);
+
+  return (
+    <InboxWorkspace
+      initialConversations={conversations}
+      initialMessagesByConversation={initialMessagesByConversation}
+      setters={setters}
+    />
+  );
 }

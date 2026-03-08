@@ -516,6 +516,82 @@ alter table public.experiment_events enable row level security;
 --   );
 
 -- =====================================================
+-- MULTICHANNEL EVENTS + OUTBOUND DELIVERY (Sprint 11 scaffold)
+-- =====================================================
+create table if not exists public.channel_events (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  conversation_id uuid references public.conversations(id) on delete set null,
+  channel text not null check (channel in ('instagram', 'whatsapp', 'email')),
+  event_direction text not null default 'inbound' check (event_direction in ('inbound', 'outbound', 'system')),
+  event_type text not null check (event_type in ('text', 'voice', 'image', 'system')),
+  provider_event_id text,
+  external_conversation_id text,
+  sender_external_id text,
+  payload jsonb not null default '{}'::jsonb,
+  received_at timestamptz not null default now(),
+  processed_at timestamptz,
+  status text not null default 'received' check (status in ('received', 'normalized', 'failed')),
+  retry_count int not null default 0 check (retry_count >= 0),
+  error_message text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.outbound_messages (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  conversation_id uuid references public.conversations(id) on delete set null,
+  channel text not null check (channel in ('instagram', 'whatsapp', 'email')),
+  message_type text not null default 'text' check (message_type in ('text', 'voice', 'image', 'system')),
+  recipient_external_id text not null,
+  body text not null,
+  metadata jsonb not null default '{}'::jsonb,
+  provider_name text not null default 'mock',
+  provider_message_id text,
+  status text not null default 'queued' check (status in ('queued', 'sent', 'failed', 'retrying', 'delivered')),
+  retry_count int not null default 0 check (retry_count >= 0),
+  next_retry_at timestamptz,
+  last_error text,
+  queued_at timestamptz not null default now(),
+  sent_at timestamptz,
+  delivered_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists channel_events_org_received_idx on public.channel_events (organization_id, received_at desc);
+create index if not exists channel_events_org_channel_status_idx on public.channel_events (organization_id, channel, status, created_at desc);
+create index if not exists channel_events_provider_event_idx on public.channel_events (provider_event_id) where provider_event_id is not null;
+
+create index if not exists outbound_messages_org_queued_idx on public.outbound_messages (organization_id, queued_at desc);
+create index if not exists outbound_messages_org_channel_status_idx on public.outbound_messages (organization_id, channel, status, updated_at desc);
+create index if not exists outbound_messages_retry_idx on public.outbound_messages (status, next_retry_at) where status in ('failed', 'retrying');
+create index if not exists outbound_messages_provider_message_idx on public.outbound_messages (provider_message_id) where provider_message_id is not null;
+
+alter table public.channel_events enable row level security;
+alter table public.outbound_messages enable row level security;
+
+-- channel_events
+-- create policy channel_events_org_scope on public.channel_events
+--   for all using (
+--     exists (
+--       select 1 from public.memberships m
+--       where m.organization_id = channel_events.organization_id
+--       and m.user_id = auth.uid()
+--     )
+--   );
+
+-- outbound_messages
+-- create policy outbound_messages_org_scope on public.outbound_messages
+--   for all using (
+--     exists (
+--       select 1 from public.memberships m
+--       where m.organization_id = outbound_messages.organization_id
+--       and m.user_id = auth.uid()
+--     )
+--   );
+
+-- =====================================================
 -- CONTENT ATTRIBUTION + REPORTING (Sprint 10 scaffold)
 -- =====================================================
 create table if not exists public.content_pieces (

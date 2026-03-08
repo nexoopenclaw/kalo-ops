@@ -1,13 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { InboxConversation, InboxFilters, InboxMessage } from "@/lib/inbox-service";
+import type { Channel, InboxConversation, InboxFilters, InboxMessage, MessageType } from "@/lib/inbox-service";
 
 type SetterOption = { id: string; name: string };
 
 type InboxWorkspaceProps = {
   initialConversations: InboxConversation[];
-  initialThread: InboxMessage[];
+  initialMessagesByConversation: Record<string, InboxMessage[]>;
   setters: SetterOption[];
 };
 
@@ -21,6 +21,28 @@ const statusOptions: Array<{ value: InboxFilters["status"]; label: string }> = [
   { value: "lost", label: "Perdido" },
 ];
 
+const channelTabs: Array<{ value: InboxFilters["channel"]; label: string; icon: string }> = [
+  { value: "all", label: "Todo", icon: "📥" },
+  { value: "instagram", label: "Instagram", icon: "📸" },
+  { value: "whatsapp", label: "WhatsApp", icon: "🟢" },
+  { value: "email", label: "Email", icon: "✉️" },
+];
+
+const channelVisuals: Record<Channel, { icon: string; label: string }> = {
+  instagram: { icon: "📸", label: "Instagram" },
+  whatsapp: { icon: "🟢", label: "WhatsApp" },
+  email: { icon: "✉️", label: "Email" },
+  webchat: { icon: "💬", label: "Webchat" },
+  other: { icon: "🔗", label: "Otro" },
+};
+
+const messageTypeBadge: Record<MessageType, string> = {
+  text: "Texto",
+  voice: "Voz",
+  image: "Imagen",
+  system: "Sistema",
+};
+
 function formatRelative(ts: string): string {
   const diffMs = Date.now() - new Date(ts).getTime();
   const minutes = Math.max(1, Math.round(diffMs / 60000));
@@ -29,53 +51,77 @@ function formatRelative(ts: string): string {
   return `hace ${hours}h`;
 }
 
-export function InboxWorkspace({ initialConversations, initialThread, setters }: InboxWorkspaceProps) {
+export function InboxWorkspace({ initialConversations, initialMessagesByConversation, setters }: InboxWorkspaceProps) {
   const [status, setStatus] = useState<InboxFilters["status"]>("all");
   const [setter, setSetter] = useState<InboxFilters["setter"]>("all");
+  const [channel, setChannel] = useState<InboxFilters["channel"]>("all");
   const [noReply, setNoReply] = useState(false);
   const [selectedId, setSelectedId] = useState(initialConversations[0]?.id ?? "");
   const [composerValue, setComposerValue] = useState("");
-  const [localThread, setLocalThread] = useState(initialThread);
+
+  const [localMessagesByConversation, setLocalMessagesByConversation] = useState(initialMessagesByConversation);
 
   const filtered = useMemo(() => {
     return initialConversations.filter((conversation) => {
       if (status !== "all" && conversation.status !== status) return false;
       if (setter !== "all" && conversation.assignedSetterId !== setter) return false;
+      if (channel !== "all" && conversation.channel !== channel) return false;
       if (noReply && !conversation.hasNoReply) return false;
       return true;
     });
-  }, [initialConversations, noReply, setter, status]);
+  }, [initialConversations, noReply, setter, status, channel]);
 
   const selectedConversation = filtered.find((conversation) => conversation.id === selectedId) ?? filtered[0];
 
-  const threadMessages = selectedConversation?.id === initialConversations[0]?.id ? localThread : [];
+  const threadMessages = selectedConversation ? (localMessagesByConversation[selectedConversation.id] ?? []) : [];
 
   const onSend = () => {
-    if (!composerValue.trim()) return;
-    setLocalThread((prev) => [
+    if (!composerValue.trim() || !selectedConversation) return;
+
+    const newMessage: InboxMessage = {
+      id: `local_${Date.now()}`,
+      organizationId: "org_1",
+      conversationId: selectedConversation.id,
+      direction: "outbound",
+      messageType: "text",
+      sourceChannel: selectedConversation.channel,
+      body: composerValue.trim(),
+      senderLabel: "Setter",
+      sentAt: new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }),
+    };
+
+    setLocalMessagesByConversation((prev) => ({
       ...prev,
-      {
-        id: `local_${Date.now()}`,
-        organizationId: "org_1",
-        conversationId: selectedConversation?.id ?? "",
-        direction: "outbound",
-        body: composerValue.trim(),
-        senderLabel: "Setter",
-        sentAt: new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }),
-      },
-    ]);
+      [selectedConversation.id]: [...(prev[selectedConversation.id] ?? []), newMessage],
+    }));
+
     setComposerValue("");
   };
 
   return (
-    <main className="grid gap-4 xl:grid-cols-[360px_1fr]">
+    <main className="grid gap-4 xl:grid-cols-[380px_1fr]">
       <section className="card p-3">
         <header className="mb-3 px-2">
-          <h3 className="text-lg font-semibold">Inbox Core</h3>
-          <p className="text-xs text-zinc-500">Prioriza por estado, setter y SLA.</p>
+          <h3 className="text-lg font-semibold">Inbox multicanal</h3>
+          <p className="text-xs text-zinc-500">Cola unificada con filtros por canal, estado, owner y SLA.</p>
         </header>
 
         <div className="mb-3 grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-black/20 p-2">
+          <div className="col-span-2 flex gap-1 rounded-lg border border-white/10 bg-[#0f1728] p-1">
+            {channelTabs.map((tab) => (
+              <button
+                key={tab.value ?? "all"}
+                onClick={() => setChannel(tab.value)}
+                className={`flex-1 rounded-md px-2 py-1.5 text-xs transition ${
+                  channel === tab.value ? "bg-[#d4e83a]/20 text-[#d4e83a]" : "text-zinc-300 hover:bg-white/5"
+                }`}
+              >
+                <span className="mr-1">{tab.icon}</span>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
           <label className="col-span-2 text-[11px] uppercase tracking-[0.16em] text-zinc-500">Estado</label>
           <select
             value={status}
@@ -89,7 +135,7 @@ export function InboxWorkspace({ initialConversations, initialThread, setters }:
             ))}
           </select>
 
-          <label className="col-span-2 mt-1 text-[11px] uppercase tracking-[0.16em] text-zinc-500">Setter</label>
+          <label className="col-span-2 mt-1 text-[11px] uppercase tracking-[0.16em] text-zinc-500">Owner</label>
           <select
             value={setter}
             onChange={(event) => setSetter(event.target.value)}
@@ -111,7 +157,7 @@ export function InboxWorkspace({ initialConversations, initialThread, setters }:
                 : "border-white/15 bg-transparent text-zinc-300 hover:bg-white/5"
             }`}
           >
-            Sin respuesta
+            Solo sin respuesta
           </button>
         </div>
 
@@ -132,11 +178,17 @@ export function InboxWorkspace({ initialConversations, initialThread, setters }:
                     <span className="rounded-full bg-[#d4e83a] px-2 py-0.5 text-xs font-semibold text-black">{thread.unreadCount}</span>
                   )}
                 </div>
-                <div className="mt-1 flex items-center gap-2 text-[11px] text-zinc-500">
-                  <span className="uppercase">{thread.channel}</span>
+
+                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-500">
+                  <span className="rounded-md border border-white/15 px-1.5 py-0.5 text-zinc-300">
+                    {channelVisuals[thread.channel].icon} {channelVisuals[thread.channel].label}
+                  </span>
                   <span>•</span>
-                  <span>{thread.assignedSetterName ?? "Sin setter"}</span>
+                  <span>Owner: {thread.ownerName ?? "Sin owner"}</span>
+                  <span>•</span>
+                  <span className="uppercase">Etapa: {thread.stage}</span>
                 </div>
+
                 <p className="mt-2 line-clamp-2 text-sm text-zinc-300">{thread.preview}</p>
                 <div className="mt-2 flex items-center justify-between text-xs">
                   <span className="text-zinc-500">{formatRelative(thread.lastMessageAt)}</span>
@@ -158,7 +210,9 @@ export function InboxWorkspace({ initialConversations, initialThread, setters }:
 
       <section className="card p-4">
         <header className="border-b border-white/10 pb-3">
-          <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">{selectedConversation?.channel ?? "inbox"}</p>
+          <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">
+            {selectedConversation ? `${channelVisuals[selectedConversation.channel].icon} ${channelVisuals[selectedConversation.channel].label}` : "inbox"}
+          </p>
           <h3 className="text-lg font-semibold">{selectedConversation?.leadName ?? "Sin selección"}</h3>
         </header>
 
@@ -166,10 +220,18 @@ export function InboxWorkspace({ initialConversations, initialThread, setters }:
           {threadMessages.map((message) => (
             <div key={message.id} className={`flex ${message.direction === "outbound" ? "justify-end" : "justify-start"}`}>
               <div
-                className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
+                className={`max-w-[82%] rounded-2xl px-3 py-2 text-sm ${
                   message.direction === "outbound" ? "bg-[#d4e83a] text-black" : "bg-white/10 text-zinc-100"
                 }`}
               >
+                <div className="mb-1 flex items-center gap-2 text-[10px] uppercase tracking-[0.12em]">
+                  <span className={`${message.direction === "outbound" ? "text-black/70" : "text-zinc-400"}`}>
+                    {channelVisuals[message.sourceChannel].icon} {channelVisuals[message.sourceChannel].label}
+                  </span>
+                  <span className={`rounded-md border px-1.5 py-0.5 ${message.direction === "outbound" ? "border-black/20" : "border-white/20"}`}>
+                    {messageTypeBadge[message.messageType]}
+                  </span>
+                </div>
                 {message.body}
                 <p className={`mt-1 text-[11px] ${message.direction === "outbound" ? "text-black/70" : "text-zinc-400"}`}>
                   {message.sentAt}
