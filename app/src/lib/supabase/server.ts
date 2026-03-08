@@ -1,18 +1,40 @@
 import { createClient } from "@supabase/supabase-js";
 
-export function createSupabaseServerClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+function getSupabaseUrl() {
+  const value = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!value) throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL.");
+  return value;
+}
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY.");
-  }
+function getAnonKey() {
+  const value = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!value) throw new Error("Missing NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+  return value;
+}
 
-  // TODO: switch to SUPABASE_SERVICE_ROLE_KEY for trusted server-only operations.
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
+function getServiceRoleKey() {
+  const value = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!value) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY.");
+  return value;
+}
+
+export function createSupabaseServerClient(accessToken?: string) {
+  const global = accessToken
+    ? {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    : undefined;
+
+  return createClient(getSupabaseUrl(), getAnonKey(), {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global,
+  });
+}
+
+export function createSupabaseServiceRoleClient() {
+  return createClient(getSupabaseUrl(), getServiceRoleKey(), {
+    auth: { persistSession: false, autoRefreshToken: false },
   });
 }

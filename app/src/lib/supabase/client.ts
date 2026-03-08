@@ -8,5 +8,9 @@ export function createSupabaseBrowserClient() {
     throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY.");
   }
 
+  if (typeof window !== "undefined" && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY must never be available in browser runtime.");
+  }
+
   return createClient(supabaseUrl, supabaseAnonKey);
 }

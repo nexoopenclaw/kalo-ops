@@ -1,49 +1,50 @@
-import { fail, ok } from "@/lib/api-response";
-import { processWebhook } from "@/lib/webhook-engine";
+import { NextResponse } from "next/server";
+import { resolveDbContext, AuthContextError } from "@/lib/db/context";
 import type { SupportedChannel } from "@/lib/channel-adapters";
-
-interface ProcessBody {
-  organizationId?: string;
-  channel?: SupportedChannel;
-  payload?: unknown;
-  externalId?: string;
-  maxRetries?: number;
-}
+import { channelDispatcher } from "@/lib/channel-adapters";
+import { insertWebhookEvent } from "@/lib/db/repositories/webhooks-repository";
 
 const SUPPORTED_CHANNELS: SupportedChannel[] = ["instagram", "whatsapp", "email"];
 
 export async function POST(request: Request) {
-  let body: ProcessBody;
-
   try {
-    body = (await request.json()) as ProcessBody;
-  } catch {
-    return fail({ code: "BAD_JSON", message: "JSON inválido en el body" }, 400);
+    const ctx = await resolveDbContext(request);
+    const body = (await request.json()) as { channel?: SupportedChannel; payload?: unknown; externalId?: string; maxRetries?: number };
+
+    if (!body.channel || !SUPPORTED_CHANNELS.includes(body.channel)) {
+      return NextResponse.json({ ok: false, error: "channel debe ser instagram, whatsapp o email" }, { status: 400 });
+    }
+
+    if (!body.payload) return NextResponse.json({ ok: false, error: "payload es obligatorio" }, { status: 400 });
+
+    const normalized = channelDispatcher.normalizeInbound(body.channel, body.payload);
+    const msg = String(normalized.body ?? "").toLowerCase();
+    const transient = ["force_fail", "timeout", "temporario", "retry"].some((k) => msg.includes(k));
+    const maxRetries = Number(body.maxRetries ?? 3);
+    const retryCount = transient ? 1 : 0;
+    const status = transient ? (retryCount >= maxRetries ? "failed_permanent" : "retrying") : "processed";
+
+    const result = await insertWebhookEvent(ctx, {
+      channel: body.channel,
+      externalId: body.externalId ?? normalized.eventId,
+      eventId: normalized.eventId,
+      payloadJson: (body.payload as Record<string, unknown>) ?? {},
+      normalizedPayload: normalized as unknown as Record<string, unknown>,
+      processingLog: [
+        { at: new Date().toISOString(), level: "info", message: "Envelope normalizado por channel adapter." },
+        { at: new Date().toISOString(), level: transient ? "warn" : "info", message: transient ? "Fallo transitorio, en retry queue." : "Evento procesado correctamente." },
+      ],
+      status,
+      retryCount,
+      maxRetries,
+      nextAttemptAt: transient ? new Date(Date.now() + 60_000).toISOString() : null,
+      latencyMs: 1,
+      errorMessage: transient ? "Fallo transitorio" : null,
+    });
+
+    return NextResponse.json({ ok: true, data: result }, { status: result.idempotencyHit ? 200 : 202 });
+  } catch (error) {
+    if (error instanceof AuthContextError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Unexpected error" }, { status: 500 });
   }
-
-  const organizationId = String(body.organizationId ?? "org_1").trim();
-  const channel = body.channel;
-
-  if (!channel || !SUPPORTED_CHANNELS.includes(channel)) {
-    return fail({ code: "VALIDATION_ERROR", message: "channel debe ser instagram, whatsapp o email" }, 400);
-  }
-
-  if (!body.payload) {
-    return fail({ code: "VALIDATION_ERROR", message: "payload es obligatorio" }, 400);
-  }
-
-  const maxRetries = Number(body.maxRetries ?? 3);
-  if (!Number.isFinite(maxRetries) || maxRetries < 1 || maxRetries > 10) {
-    return fail({ code: "VALIDATION_ERROR", message: "maxRetries debe estar entre 1 y 10" }, 400);
-  }
-
-  const result = await processWebhook({
-    organizationId,
-    channel,
-    payload: body.payload,
-    externalId: body.externalId,
-    maxRetries,
-  });
-
-  return ok(result, result.idempotencyHit ? 200 : 202);
 }

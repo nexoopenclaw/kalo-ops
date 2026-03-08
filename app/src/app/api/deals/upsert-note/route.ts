@@ -1,45 +1,20 @@
 import { NextResponse } from "next/server";
-import { crmService } from "@/lib/crm-service";
+import { resolveDbContext, AuthContextError } from "@/lib/db/context";
+import { upsertDealNote } from "@/lib/db/repositories/deals-repository";
 
-type UpsertNoteBody = {
-  organizationId?: string;
-  dealId?: string;
-  note?: string;
-  objections?: string[];
-};
+type Body = { dealId?: string; note?: string; objections?: string[] };
 
 export async function POST(request: Request) {
-  let payload: UpsertNoteBody;
-
   try {
-    payload = (await request.json()) as UpsertNoteBody;
-  } catch {
-    return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
+    const ctx = await resolveDbContext(request);
+    const body = (await request.json()) as Body;
+    if (!body.dealId || !body.note?.trim()) return NextResponse.json({ ok: false, error: "dealId and note are required" }, { status: 400 });
+    const objections = Array.isArray(body.objections) ? body.objections.filter((o): o is string => typeof o === "string") : [];
+    const data = await upsertDealNote(ctx, { dealId: body.dealId, note: body.note.trim(), objections });
+    if (!data) return NextResponse.json({ ok: false, error: "Deal not found" }, { status: 404 });
+    return NextResponse.json({ ok: true, data });
+  } catch (error) {
+    if (error instanceof AuthContextError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Unexpected error" }, { status: 500 });
   }
-
-  const { organizationId, dealId, note, objections } = payload;
-
-  if (!organizationId || !dealId || !note?.trim()) {
-    return NextResponse.json({ ok: false, error: "organizationId, dealId y note son obligatorios" }, { status: 400 });
-  }
-
-  if (objections && !Array.isArray(objections)) {
-    return NextResponse.json({ ok: false, error: "objections debe ser un array de strings" }, { status: 400 });
-  }
-
-  const normalizedObjections = (objections ?? []).filter((item): item is string => typeof item === "string");
-
-  const updated = await crmService.upsertDealNote({
-    organizationId,
-    dealId,
-    note: note.trim(),
-    objections: normalizedObjections,
-  });
-
-  if (!updated) {
-    return NextResponse.json({ ok: false, error: "Deal no encontrado" }, { status: 404 });
-  }
-
-  // TODO(Supabase): persist note record and objection rows tied to deal/organization.
-  return NextResponse.json({ ok: true, data: updated });
 }

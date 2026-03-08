@@ -1,34 +1,35 @@
-import { fail, ok } from "@/lib/api-response";
-import { getWebhookMetrics, listWebhookEvents } from "@/lib/webhook-engine";
-import type { SupportedChannel } from "@/lib/channel-adapters";
-import type { WebhookEventStatus } from "@/lib/in-memory-persistence";
-
-const SUPPORTED_CHANNELS: SupportedChannel[] = ["instagram", "whatsapp", "email"];
-const SUPPORTED_STATUS: WebhookEventStatus[] = ["processed", "retrying", "failed_permanent"];
+import { NextResponse } from "next/server";
+import { resolveDbContext, AuthContextError } from "@/lib/db/context";
+import { listWebhookEvents } from "@/lib/db/repositories/webhooks-repository";
 
 export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const channel = url.searchParams.get("channel");
-  const status = url.searchParams.get("status");
-  const from = url.searchParams.get("from");
-  const to = url.searchParams.get("to");
-  const search = url.searchParams.get("search");
+  try {
+    const ctx = await resolveDbContext(request);
+    const url = new URL(request.url);
+    const channel = url.searchParams.get("channel") ?? undefined;
+    const status = url.searchParams.get("status") ?? undefined;
+    const search = url.searchParams.get("search") ?? undefined;
 
-  if (channel && !SUPPORTED_CHANNELS.includes(channel as SupportedChannel)) {
-    return fail({ code: "VALIDATION_ERROR", message: "channel inválido" }, 400);
+    const events = await listWebhookEvents(ctx, { channel, status, search });
+
+    const total = events.length;
+    const success = events.filter((event) => event.status === "processed").length;
+    const avgLatencyMs = total ? Math.round(events.reduce((acc, item) => acc + Number(item.latency_ms ?? 0), 0) / total) : 0;
+
+    return NextResponse.json({
+      ok: true,
+      data: {
+        events,
+        metrics: {
+          successRate: total ? Number(((success / total) * 100).toFixed(1)) : 100,
+          avgLatencyMs,
+          retryQueueSize: events.filter((event) => event.status === "retrying").length,
+          deadLetterCount: events.filter((event) => event.status === "failed_permanent").length,
+        },
+      },
+    });
+  } catch (error) {
+    if (error instanceof AuthContextError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Unexpected error" }, { status: 500 });
   }
-
-  if (status && !SUPPORTED_STATUS.includes(status as WebhookEventStatus)) {
-    return fail({ code: "VALIDATION_ERROR", message: "status inválido" }, 400);
-  }
-
-  const events = listWebhookEvents({
-    channel: channel ? (channel as SupportedChannel) : undefined,
-    status: status ? (status as WebhookEventStatus) : undefined,
-    from: from ?? undefined,
-    to: to ?? undefined,
-    search: search ?? undefined,
-  });
-
-  return ok({ events, metrics: getWebhookMetrics() });
 }

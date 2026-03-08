@@ -1,35 +1,22 @@
 import { NextResponse } from "next/server";
-import { automationService } from "@/lib/automation-service";
+import { resolveDbContext, AuthContextError } from "@/lib/db/context";
+import { toggleAutomation } from "@/lib/db/repositories/automations-repository";
 
-type ToggleBody = {
-  organizationId?: string;
-  workflowId?: string;
-  active?: boolean;
-};
+type Body = { workflowId?: string; active?: boolean };
 
 export async function POST(request: Request) {
-  let payload: ToggleBody;
-
   try {
-    payload = (await request.json()) as ToggleBody;
-  } catch {
-    return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
+    const ctx = await resolveDbContext(request);
+    const body = (await request.json()) as Body;
+    if (!body.workflowId || typeof body.active !== "boolean") {
+      return NextResponse.json({ ok: false, error: "workflowId and active are required" }, { status: 400 });
+    }
+
+    const data = await toggleAutomation(ctx, { workflowId: body.workflowId, active: body.active });
+    if (!data) return NextResponse.json({ ok: false, error: "Workflow not found" }, { status: 404 });
+    return NextResponse.json({ ok: true, data });
+  } catch (error) {
+    if (error instanceof AuthContextError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Unexpected error" }, { status: 500 });
   }
-
-  if (!payload.organizationId || !payload.workflowId || typeof payload.active !== "boolean") {
-    return NextResponse.json({ ok: false, error: "organizationId, workflowId y active son obligatorios" }, { status: 400 });
-  }
-
-  const updated = await automationService.toggle({
-    organizationId: payload.organizationId,
-    workflowId: payload.workflowId,
-    active: payload.active,
-  });
-
-  if (!updated) {
-    return NextResponse.json({ ok: false, error: "Workflow no encontrado" }, { status: 404 });
-  }
-
-  // TODO(Supabase): update active flag in public.automations.
-  return NextResponse.json({ ok: true, data: updated });
 }
