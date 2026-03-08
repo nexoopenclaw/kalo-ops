@@ -1,21 +1,20 @@
-import { NextResponse } from "next/server";
+import { fail, ok } from "@/lib/api-response";
 import { voiceService, type VoiceConsentInput } from "@/lib/voice-service";
 
 type ConsentBody = Partial<VoiceConsentInput>;
 
 export async function POST(request: Request) {
   let payload: ConsentBody;
-
   try {
     payload = (await request.json()) as ConsentBody;
   } catch {
-    return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
+    return fail({ code: "INVALID_JSON", message: "Body JSON inválido." }, 400);
   }
 
   if (!payload.organizationId || !payload.actorUserId || !payload.leadId || typeof payload.voiceCloneAllowed !== "boolean") {
-    return NextResponse.json(
-      { ok: false, error: "organizationId, actorUserId, leadId y voiceCloneAllowed son obligatorios" },
-      { status: 400 },
+    return fail(
+      { code: "VALIDATION_ERROR", message: "organizationId, actorUserId, leadId y voiceCloneAllowed son obligatorios." },
+      400,
     );
   }
 
@@ -27,5 +26,5 @@ export async function POST(request: Request) {
     reason: payload.reason?.trim(),
   });
 
-  return NextResponse.json({ ok: true, data }, { status: 202 });
+  return ok(data, 202);
 }

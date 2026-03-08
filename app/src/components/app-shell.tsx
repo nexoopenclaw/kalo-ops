@@ -14,6 +14,7 @@ const navItems = [
   { href: "/attribution", label: "Attribution" },
   { href: "/reportes", label: "Reportes" },
   { href: "/config", label: "Config" },
+  { href: "/qa", label: "QA" },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {

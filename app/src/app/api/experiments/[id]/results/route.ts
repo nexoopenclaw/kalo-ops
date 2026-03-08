@@ -1,19 +1,21 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { fail, ok } from "@/lib/api-response";
 import { voiceService } from "@/lib/voice-service";
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const organizationId = request.nextUrl.searchParams.get("organizationId") ?? "org_1";
+  const organizationId = request.nextUrl.searchParams.get("organizationId");
+  const from = request.nextUrl.searchParams.get("from") ?? undefined;
+  const to = request.nextUrl.searchParams.get("to") ?? undefined;
   const { id } = await context.params;
 
-  if (!id?.trim()) {
-    return NextResponse.json({ ok: false, error: "id es obligatorio" }, { status: 400 });
+  if (!organizationId || !id?.trim()) {
+    return fail({ code: "VALIDATION_ERROR", message: "organizationId e id son obligatorios." }, 400);
   }
 
-  const data = await voiceService.getExperimentResults(organizationId, id);
+  const data = await voiceService.getExperimentResults(organizationId, id, from, to);
   if (!data) {
-    return NextResponse.json({ ok: false, error: "Experimento no encontrado" }, { status: 404 });
+    return fail({ code: "NOT_FOUND", message: "Experimento no encontrado." }, 404);
   }
 
-  // TODO(Persistence): source results from experiments + experiment_events SQL tables.
-  return NextResponse.json({ ok: true, data });
+  return ok(data);
 }
