@@ -1,170 +1,145 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
-import type { RiskAlertEvent, RiskCockpitData, RiskWorkflow } from "@/lib/risk-automation-service";
+import type { HoySummary } from "@/lib/hoy-service";
 
 type Props = {
-  initialData: RiskCockpitData;
+  initialData: HoySummary;
 };
 
 export function HoyWorkspace({ initialData }: Props) {
   const [data, setData] = useState(initialData);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [lastScanSummary, setLastScanSummary] = useState<string>("");
+  const [loading, setLoading] = useState(false);
 
-  const refreshCockpit = async () => {
-    const response = await fetch("/api/risk/cockpit");
-    const json = (await response.json()) as { ok: boolean; data?: RiskCockpitData };
-    if (json.ok && json.data) setData(json.data);
-  };
-
-  const runScan = async () => {
-    setBusy("scan");
+  const refresh = async () => {
+    setLoading(true);
     try {
-      const response = await fetch("/api/risk/scan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ organizationId: "org_1" }),
-      });
-      const json = (await response.json()) as {
-        ok: boolean;
-        data?: { scannedDeals: number; triggeredWorkflows: number; generatedAlerts: number };
-      };
-
-      if (json.ok && json.data) {
-        setLastScanSummary(
-          `Scan completado · ${json.data.scannedDeals} deals evaluados · ${json.data.triggeredWorkflows} workflows disparados · ${json.data.generatedAlerts} alertas nuevas`,
-        );
-        await refreshCockpit();
-      }
+      const response = await fetch("/api/hoy/summary");
+      const json = (await response.json()) as { ok: boolean; data?: HoySummary };
+      if (json.ok && json.data) setData(json.data);
     } finally {
-      setBusy(null);
-    }
-  };
-
-  const toggleWorkflow = async (workflow: RiskWorkflow) => {
-    setBusy(workflow.id);
-    try {
-      await fetch("/api/risk/workflows/toggle", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ organizationId: "org_1", workflowId: workflow.id, enabled: !workflow.enabled }),
-      });
-      await refreshCockpit();
-    } finally {
-      setBusy(null);
+      setLoading(false);
     }
   };
 
   return (
     <main className="space-y-4">
       <section className="card p-5">
-        <p className="text-xs uppercase tracking-[0.2em] text-zinc-400">Hoy · Command Center</p>
+        <p className="text-xs uppercase tracking-[0.2em] text-zinc-400">Hoy · Cockpit Operativo</p>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold">Riesgo Pipeline + Alertas</h1>
-            <p className="text-sm text-zinc-400">Centro operativo para detectar deals en riesgo y disparar automatizaciones de rescate.</p>
+            <h1 className="text-2xl font-semibold">Command Center del día</h1>
+            <p className="text-sm text-zinc-400">Prioridades, SLA, riesgo de pipeline y alertas en una sola vista ejecutiva.</p>
           </div>
           <button
-            onClick={runScan}
-            disabled={Boolean(busy)}
+            onClick={refresh}
+            disabled={loading}
             className="rounded-lg border border-[#d4e83a]/45 bg-[#d4e83a]/15 px-4 py-2 text-sm font-medium text-[#d4e83a] disabled:opacity-60"
           >
-            {busy === "scan" ? "Escaneando..." : "Ejecutar scan ahora"}
+            {loading ? "Actualizando..." : "Actualizar snapshot"}
           </button>
         </div>
-        {lastScanSummary ? <p className="mt-3 text-sm text-[#d4e83a]">{lastScanSummary}</p> : null}
       </section>
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 lg:grid-cols-[1.2fr_1fr]">
         <article className="card p-4">
-          <p className="text-xs text-zinc-500">Deals en riesgo</p>
-          <p className="mt-2 text-2xl font-semibold text-[#d4e83a]">{data.totals.dealsAtRisk}</p>
-        </article>
-        <article className="card p-4">
-          <p className="text-xs text-zinc-500">Revenue en riesgo</p>
-          <p className="mt-2 text-2xl font-semibold">€{data.totals.revenueAtRisk.toLocaleString("es-ES")}</p>
-        </article>
-        <article className="card p-4">
-          <p className="text-xs text-zinc-500">Reglas activas</p>
-          <p className="mt-2 text-2xl font-semibold">{data.totals.activeRules}</p>
-        </article>
-        <article className="card p-4">
-          <p className="text-xs text-zinc-500">Acciones sugeridas</p>
-          <p className="mt-2 text-2xl font-semibold">{data.totals.suggestedActions}</p>
-        </article>
-      </section>
-
-      <section className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-        <article className="card p-4">
-          <h2 className="text-lg font-semibold">Deals críticos ahora</h2>
+          <h2 className="text-lg font-semibold">Prioridades de hoy</h2>
           <div className="mt-3 space-y-2">
-            {data.dealsAtRisk.length === 0 ? (
-              <p className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-sm text-zinc-400">Sin deals críticos por encima del umbral.</p>
-            ) : (
-              data.dealsAtRisk.map((deal) => (
-                <div key={deal.dealId} className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-sm">
-                  <p className="font-medium text-zinc-100">{deal.leadName} · {deal.stage}</p>
-                  <p className="text-zinc-400">Owner: {deal.ownerName} · Inactivo {deal.inactiveDays} días · €{deal.value.toLocaleString("es-ES")}</p>
+            {data.priorities.map((task) => (
+              <div key={task.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-medium text-zinc-100">{task.title}</p>
+                  <span className={`rounded-md px-2 py-0.5 text-xs ${task.priority === "alta" ? "bg-red-500/20 text-red-300" : "bg-zinc-600/20 text-zinc-300"}`}>
+                    {task.priority}
+                  </span>
                 </div>
-              ))
-            )}
-          </div>
-        </article>
-
-        <article className="card p-4">
-          <h2 className="text-lg font-semibold">Recomendaciones IA operativa</h2>
-          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-zinc-300">
-            {data.recommendations.map((item) => <li key={item}>{item}</li>)}
-          </ul>
-        </article>
-      </section>
-
-      <section className="grid gap-4 lg:grid-cols-2">
-        <article className="card p-4">
-          <h2 className="text-lg font-semibold">Workflows de rescate</h2>
-          <div className="mt-3 space-y-2">
-            {data.workflows.map((workflow) => (
-              <div key={workflow.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-sm">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-medium text-zinc-100">{workflow.name}</p>
-                    <p className="text-zinc-400">{workflow.description}</p>
-                    <p className="mt-1 text-xs text-zinc-500">Umbral: {workflow.thresholdDays} días · Acción: {workflow.actionLabel}</p>
-                  </div>
-                  <button
-                    onClick={() => toggleWorkflow(workflow)}
-                    disabled={Boolean(busy)}
-                    className={`rounded-md border px-2 py-1 text-xs ${
-                      workflow.enabled
-                        ? "border-[#d4e83a]/40 bg-[#d4e83a]/10 text-[#d4e83a]"
-                        : "border-zinc-500/40 bg-zinc-500/10 text-zinc-300"
-                    }`}
-                  >
-                    {busy === workflow.id ? "..." : workflow.enabled ? "Activo" : "Inactivo"}
-                  </button>
-                </div>
+                <p className="mt-1 text-zinc-400">{task.detail}</p>
               </div>
             ))}
           </div>
         </article>
 
         <article className="card p-4">
-          <h2 className="text-lg font-semibold">Alertas recientes</h2>
+          <h2 className="text-lg font-semibold">Top alertas + quick actions</h2>
           <div className="mt-3 space-y-2">
-            {data.recentAlerts.length === 0 ? (
-              <p className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-sm text-zinc-400">Aún no hay alertas generadas en este turno.</p>
+            {data.topAlerts.map((alert) => (
+              <div key={alert.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-sm">
+                <p className={`font-medium ${alert.level === "critica" ? "text-red-300" : "text-[#d4e83a]"}`}>{alert.title}</p>
+                <p className="text-zinc-400">{alert.detail}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-2">
+            {data.quickActions.map((action) => (
+              <Link key={action.id} href={action.href} className="rounded-lg border border-[#d4e83a]/30 bg-[#d4e83a]/10 px-3 py-2 text-sm text-[#d4e83a] hover:bg-[#d4e83a]/15">
+                {action.label}
+              </Link>
+            ))}
+          </div>
+        </article>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        <article className="card p-4">
+          <h2 className="text-lg font-semibold">Inbox SLA · Cola urgente</h2>
+          <div className="mt-3 space-y-2">
+            {data.inboxUrgentQueue.length === 0 ? (
+              <p className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-sm text-zinc-400">Sin conversaciones urgentes en este turno.</p>
             ) : (
-              data.recentAlerts.map((alert: RiskAlertEvent) => (
-                <div key={alert.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-sm">
-                  <p className="font-medium text-zinc-100">{alert.title}</p>
-                  <p className="text-zinc-400">{alert.detail}</p>
-                  <p className="mt-1 text-xs text-zinc-500">{new Date(alert.createdAt).toLocaleString("es-ES")}</p>
+              data.inboxUrgentQueue.map((item) => (
+                <div key={item.conversationId} className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-sm">
+                  <p className="font-medium text-zinc-100">{item.leadName} · {item.channel.toUpperCase()}</p>
+                  <p className="text-zinc-400">{item.dueLabel} · Owner {item.ownerName}</p>
+                  <p className="mt-1 text-zinc-500">{item.preview}</p>
                 </div>
               ))
             )}
           </div>
         </article>
+
+        <article className="card p-4">
+          <h2 className="text-lg font-semibold">Deals en riesgo</h2>
+          <div className="mt-3 space-y-2">
+            {data.dealsAtRisk.length === 0 ? (
+              <p className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-sm text-zinc-400">Pipeline sin deals críticos por ahora.</p>
+            ) : (
+              data.dealsAtRisk.map((deal) => (
+                <div key={deal.dealId} className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-sm">
+                  <p className="font-medium text-zinc-100">{deal.leadName} · {deal.stage}</p>
+                  <p className="text-zinc-400">Owner {deal.ownerName} · {deal.inactiveDays} días inactivo · €{deal.value.toLocaleString("es-ES")}</p>
+                </div>
+              ))
+            )}
+          </div>
+        </article>
+      </section>
+
+      <section className="card p-4">
+        <h2 className="text-lg font-semibold">Estado rápido de experimentos y automatizaciones</h2>
+        <div className="mt-3 grid gap-3 md:grid-cols-5 text-sm">
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+            <p className="text-zinc-500">Workflows activos</p>
+            <p className="mt-1 text-xl font-semibold text-[#d4e83a]">{data.automationStatus.activeWorkflows}</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+            <p className="text-zinc-500">Workflows pausados</p>
+            <p className="mt-1 text-xl font-semibold">{data.automationStatus.pausedWorkflows}</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+            <p className="text-zinc-500">Experimentos running</p>
+            <p className="mt-1 text-xl font-semibold">{data.automationStatus.experimentsRunning}</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+            <p className="text-zinc-500">Experimentos draft</p>
+            <p className="mt-1 text-xl font-semibold">{data.automationStatus.experimentsDraft}</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 md:col-span-1">
+            <p className="text-zinc-500">Última ejecución</p>
+            <p className="mt-1 text-sm text-zinc-300">{data.automationStatus.lastExecutionSummary}</p>
+          </div>
+        </div>
       </section>
     </main>
   );
