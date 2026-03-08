@@ -108,6 +108,42 @@ export interface AlertConfigStore {
   updatedAt: string;
 }
 
+export type WebhookEventStatus = "processed" | "retrying" | "failed_permanent";
+
+export interface WebhookProcessingLogEntryStore {
+  at: string;
+  level: "info" | "warn" | "error";
+  message: string;
+}
+
+export interface WebhookEventStore {
+  id: string;
+  organizationId: string;
+  channel: "instagram" | "whatsapp" | "email";
+  externalId: string;
+  idempotencyKey: string;
+  payloadJson: Record<string, unknown>;
+  normalizedPayload: Record<string, unknown>;
+  processingLog: WebhookProcessingLogEntryStore[];
+  status: WebhookEventStatus;
+  retryCount: number;
+  maxRetries: number;
+  nextAttemptAt: string | null;
+  latencyMs: number;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DeadLetterEventStore {
+  id: string;
+  organizationId: string;
+  webhookEventId: string;
+  reason: string;
+  requeuedAt: string | null;
+  createdAt: string;
+}
+
 export interface InMemoryPersistenceState {
   voiceConsents: VoiceConsentRecordStore[];
   voiceAuditEvents: VoiceAuditEventStore[];
@@ -118,6 +154,8 @@ export interface InMemoryPersistenceState {
   contentAttributions: ContentAttributionStore[];
   reportSnapshots: ReportSnapshotStore[];
   alertConfigs: AlertConfigStore[];
+  webhookEvents: WebhookEventStore[];
+  deadLetterEvents: DeadLetterEventStore[];
 }
 
 const state: InMemoryPersistenceState = {
@@ -130,6 +168,8 @@ const state: InMemoryPersistenceState = {
   contentAttributions: [],
   reportSnapshots: [],
   alertConfigs: [],
+  webhookEvents: [],
+  deadLetterEvents: [],
 };
 
 const globalKey = "__kaloOpsInMemoryState__";

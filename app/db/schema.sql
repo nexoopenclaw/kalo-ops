@@ -696,3 +696,64 @@ alter table public.alert_configs enable row level security;
 --       and m.user_id = auth.uid()
 --     )
 --   );
+
+-- =====================================================
+-- WEBHOOK RELIABILITY ENGINE (Sprint 12 scaffold)
+-- =====================================================
+create table if not exists public.webhook_events (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  channel text not null check (channel in ('instagram', 'whatsapp', 'email')),
+  external_id text not null,
+  idempotency_key text not null unique,
+  payload_json jsonb not null default '{}'::jsonb,
+  status text not null default 'processed' check (status in ('processed', 'retrying', 'failed_permanent')),
+  retry_count int not null default 0 check (retry_count >= 0),
+  max_retries int not null default 3 check (max_retries >= 1),
+  next_attempt_at timestamptz,
+  latency_ms int not null default 0,
+  error_message text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.dead_letter_events (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  webhook_event_id uuid not null references public.webhook_events(id) on delete cascade,
+  reason text not null,
+  requeued_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (webhook_event_id)
+);
+
+create index if not exists webhook_events_status_idx on public.webhook_events (status, created_at desc);
+create index if not exists webhook_events_channel_idx on public.webhook_events (channel, created_at desc);
+create index if not exists webhook_events_next_attempt_idx on public.webhook_events (next_attempt_at) where next_attempt_at is not null;
+create index if not exists webhook_events_external_id_idx on public.webhook_events (external_id);
+create index if not exists webhook_events_org_created_idx on public.webhook_events (organization_id, created_at desc);
+create index if not exists dead_letter_events_org_created_idx on public.dead_letter_events (organization_id, created_at desc);
+create index if not exists dead_letter_events_requeued_idx on public.dead_letter_events (requeued_at) where requeued_at is not null;
+
+alter table public.webhook_events enable row level security;
+alter table public.dead_letter_events enable row level security;
+
+-- webhook_events
+-- create policy webhook_events_org_scope on public.webhook_events
+--   for all using (
+--     exists (
+--       select 1 from public.memberships m
+--       where m.organization_id = webhook_events.organization_id
+--       and m.user_id = auth.uid()
+--     )
+--   );
+
+-- dead_letter_events
+-- create policy dead_letter_events_org_scope on public.dead_letter_events
+--   for all using (
+--     exists (
+--       select 1 from public.memberships m
+--       where m.organization_id = dead_letter_events.organization_id
+--       and m.user_id = auth.uid()
+--     )
+--   );

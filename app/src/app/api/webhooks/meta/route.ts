@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
+import { processWebhook } from "@/lib/webhook-engine";
 
 type MetaWebhookChange = {
   field?: string;
@@ -85,8 +86,26 @@ export async function POST(request: Request) {
 
   const events = parseWebhookEvents(payload);
 
-  // TODO(Supabase): persist parsed events and upsert conversations/messages atomically.
-  // TODO(Meta Graph API): handle message status transitions (sent/delivered/read/failed) per external_message_id.
+  const processed = await Promise.all(
+    events.map((event, index) =>
+      processWebhook({
+        organizationId: "org_1",
+        channel: "instagram",
+        externalId: `${event.entryId}_${event.type}_${index}`,
+        payload: {
+          organizationId: "org_1",
+          eventId: `${event.entryId}_${event.timestamp}_${index}`,
+          external_id: `${event.entryId}_${event.type}_${index}`,
+          occurredAt: new Date(event.timestamp).toISOString(),
+          conversationExternalId: event.entryId,
+          senderExternalId: "meta_webhook",
+          senderName: "Meta webhook",
+          body: event.type === "message" ? JSON.stringify(event.message) : JSON.stringify(event.status),
+          raw: event,
+        },
+      }),
+    ),
+  );
 
-  return NextResponse.json({ ok: true, receivedEvents: events.length, events });
+  return NextResponse.json({ ok: true, receivedEvents: events.length, processed });
 }
