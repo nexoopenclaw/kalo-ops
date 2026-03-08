@@ -2,11 +2,12 @@ import Link from "next/link";
 
 const checks = [
   { module: "Hoy Command Center", status: "PASS", detail: "Ruta /hoy activa en navegación con vista unificada de operación diaria." },
-  { module: "Servicio agregador", status: "PASS", detail: "src/lib/hoy-service.ts consolida inbox, CRM, automations, health, webhooks y attribution." },
-  { module: "API cockpit", status: "PASS", detail: "GET /api/hoy/summary devuelve payload único para UI y refresco en cliente." },
-  { module: "Paneles críticos", status: "PASS", detail: "Incluye prioridades, SLA urgente, deals en riesgo, estado experimentos/automations y alertas top." },
-  { module: "Quick actions operativas", status: "PASS", detail: "Bloque de acciones rápidas enlazadas a Inbox, CRM, Automations, Webhooks y QA." },
-  { module: "Keys-ready architecture", status: "PASS", detail: "Config centralizada, adapters de proveedores y endpoints de diagnóstico activos." },
+  { module: "Revenue Bridge panel", status: "PASS", detail: "Panel operativo en /hoy con eventos Calendly/Stripe, transiciones y métricas fail/ignored." },
+  { module: "Bridge service", status: "PASS", detail: "src/lib/revenue-bridge-service.ts implementa idempotencia + mapeo a deal stage." },
+  { module: "Webhook Calendly", status: "PASS", detail: "POST /api/webhooks/calendly con parser seguro, firma placeholder y handling NOT_CONFIGURED." },
+  { module: "Webhook Stripe", status: "PASS", detail: "POST /api/webhooks/stripe con parser seguro, firma placeholder y handling NOT_CONFIGURED." },
+  { module: "Deal stage history", status: "PASS", detail: "Bridge reutiliza crmService.updateDealStage y agrega nota auditada en deal." },
+  { module: "Schema Sprint 15", status: "PASS", detail: "Tablas integration_event_log y bridge_transitions con índices + RLS stubs." },
   { module: "UX premium dark", status: "PASS", detail: "Visual dark consistente con acento #d4e83a y copy operacional en español." },
 ];
 
@@ -14,8 +15,8 @@ export default function QAPage() {
   return (
     <main className="space-y-4">
       <section className="card p-4">
-        <h1 className="text-2xl font-semibold">QA interno · Sprint 14</h1>
-        <p className="text-sm text-zinc-400">Checklist del cockpit unificado “Hoy” antes de deploy.</p>
+        <h1 className="text-2xl font-semibold">QA interno · Sprint 15</h1>
+        <p className="text-sm text-zinc-400">Checklist operativo del cockpit + Revenue Bridge antes de deploy.</p>
       </section>
 
       <section className="card p-4">
@@ -54,19 +55,19 @@ export default function QAPage() {
         <h2 className="text-lg font-semibold">Pruebas manuales rápidas</h2>
         <ol className="mt-3 list-decimal space-y-2 pl-5 text-zinc-300">
           <li>
-            Ir a <Link href="/hoy" className="text-[#d4e83a] underline">/hoy</Link> y validar los 5 bloques: prioridades, SLA, deals en riesgo, estado de automations/experimentos y alertas.
+            Ir a <Link href="/hoy" className="text-[#d4e83a] underline">/hoy</Link> y validar bloque nuevo <strong>Revenue Bridge</strong> (eventos, transiciones, fallidos/ignorados).
           </li>
           <li>
-            Click en <strong>Actualizar snapshot</strong>; verificar recarga de datos sin errores visuales.
+            POST <code>/api/webhooks/calendly</code> con header <code>x-kalo-mock-signature: dev-ok</code> + payload ejemplo: deal pasa a <code>booked</code>.
           </li>
           <li>
-            GET <code>/api/hoy/summary</code> debe responder <code>{`{ ok: true, data: { priorities, inboxUrgentQueue, dealsAtRisk, automationStatus, topAlerts, quickActions } }`}</code>.
+            POST <code>/api/webhooks/stripe</code> con header <code>x-kalo-mock-signature: dev-ok</code> + payload ejemplo: deal pasa a <code>won</code>.
           </li>
           <li>
-            Comprobar que los botones de quick actions redirigen a <code>/inbox</code>, <code>/crm</code>, <code>/automations</code>, <code>/webhooks</code> y <code>/qa</code>.
+            Reenviar mismo <code>external_event_id</code> y validar idempotencia (status ignored / sin transición duplicada).
           </li>
           <li>
-            Revisar que el copy y estilo mantienen modo dark premium con acento <code>#d4e83a</code>.
+            Confirmar que <code>/api/hoy/summary</code> incluye <code>revenueBridge</code> en el payload y que el style dark premium + <code>#d4e83a</code> se mantiene.
           </li>
         </ol>
       </section>

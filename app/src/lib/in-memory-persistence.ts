@@ -176,6 +176,26 @@ export interface HealthActionLogStore {
   createdAt: string;
 }
 
+export interface IntegrationEventLogStore {
+  id: string;
+  provider: "calendly" | "stripe";
+  externalEventId: string;
+  status: "processed" | "ignored" | "failed";
+  payload: Record<string, unknown>;
+  processedAt: string;
+  error: string | null;
+}
+
+export interface BridgeTransitionStore {
+  id: string;
+  dealId: string;
+  fromStage: string;
+  toStage: string;
+  sourceProvider: "calendly" | "stripe";
+  externalEventId: string;
+  createdAt: string;
+}
+
 export interface InMemoryPersistenceState {
   voiceConsents: VoiceConsentRecordStore[];
   voiceAuditEvents: VoiceAuditEventStore[];
@@ -191,6 +211,8 @@ export interface InMemoryPersistenceState {
   onboardingStates: OnboardingStateStore[];
   customerHealthSnapshots: CustomerHealthSnapshotStore[];
   healthActionsLog: HealthActionLogStore[];
+  integrationEventLog: IntegrationEventLogStore[];
+  bridgeTransitions: BridgeTransitionStore[];
 }
 
 const state: InMemoryPersistenceState = {
@@ -208,6 +230,8 @@ const state: InMemoryPersistenceState = {
   onboardingStates: [],
   customerHealthSnapshots: [],
   healthActionsLog: [],
+  integrationEventLog: [],
+  bridgeTransitions: [],
 };
 
 const globalKey = "__kaloOpsInMemoryState__";

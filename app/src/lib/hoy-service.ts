@@ -4,6 +4,7 @@ import { crmService } from "@/lib/crm-service";
 import { healthService } from "@/lib/health-service";
 import { inboxService } from "@/lib/inbox-service";
 import { getPersistenceState } from "@/lib/in-memory-persistence";
+import { revenueBridgeService } from "@/lib/revenue-bridge-service";
 import { ensureWebhookSeed, getWebhookMetrics, listWebhookEvents } from "@/lib/webhook-engine";
 
 export interface HoyTask {
@@ -49,6 +50,7 @@ export interface HoySummary {
     detail: string;
   }>;
   quickActions: Array<{ id: string; label: string; href: string }>;
+  revenueBridge: ReturnType<typeof revenueBridgeService.getOperationalSnapshot>;
 }
 
 function minutesUntil(iso?: string | null): number {
@@ -79,6 +81,7 @@ export const hoyService = {
 
     const webhookMetrics = getWebhookMetrics();
     const retryingEvents = listWebhookEvents({ status: "retrying" }).length;
+    const revenueBridge = revenueBridgeService.getOperationalSnapshot();
 
     const inboxUrgentQueue = conversations
       .filter((item) => item.slaBreached || minutesUntil(item.slaDueAt) <= 30)
@@ -188,6 +191,7 @@ export const hoyService = {
         { id: "qa4", label: "Monitorear webhooks", href: "/webhooks" },
         { id: "qa5", label: "Ejecutar checklist QA", href: "/qa" },
       ],
+      revenueBridge,
     };
   },
 };

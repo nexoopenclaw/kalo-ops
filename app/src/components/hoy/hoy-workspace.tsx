@@ -117,6 +117,57 @@ export function HoyWorkspace({ initialData }: Props) {
       </section>
 
       <section className="card p-4">
+        <h2 className="text-lg font-semibold">Revenue Bridge · Calendly + Stripe</h2>
+        <p className="mt-1 text-sm text-zinc-400">Visibilidad operativa de eventos procesados y transiciones aplicadas (Booked/Won).</p>
+
+        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4 text-sm">
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+            <p className="text-zinc-500">Eventos Calendly (últimos)</p>
+            <p className="mt-1 text-xl font-semibold text-[#d4e83a]">{data.revenueBridge.lastCalendlyEvents.length}</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+            <p className="text-zinc-500">Eventos Stripe (últimos)</p>
+            <p className="mt-1 text-xl font-semibold text-[#d4e83a]">{data.revenueBridge.lastStripeEvents.length}</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+            <p className="text-zinc-500">Transiciones aplicadas</p>
+            <p className="mt-1 text-xl font-semibold">{data.revenueBridge.transitionsApplied.length}</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+            <p className="text-zinc-500">Fallidos / Ignorados</p>
+            <p className="mt-1 text-xl font-semibold text-orange-200">{data.revenueBridge.failedCount} / {data.revenueBridge.ignoredCount}</p>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 xl:grid-cols-3">
+          <article className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+            <p className="text-sm font-semibold">Calendly</p>
+            <div className="mt-2 space-y-1 text-xs text-zinc-400">
+              {data.revenueBridge.lastCalendlyEvents.length === 0 ? <p>Sin eventos todavía.</p> : data.revenueBridge.lastCalendlyEvents.map((item) => <p key={item.id}>{item.id} · {item.status}</p>)}
+            </div>
+          </article>
+          <article className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+            <p className="text-sm font-semibold">Stripe</p>
+            <div className="mt-2 space-y-1 text-xs text-zinc-400">
+              {data.revenueBridge.lastStripeEvents.length === 0 ? <p>Sin eventos todavía.</p> : data.revenueBridge.lastStripeEvents.map((item) => <p key={item.id}>{item.id} · {item.status}</p>)}
+            </div>
+          </article>
+          <article className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+            <p className="text-sm font-semibold">Últimas transiciones</p>
+            <div className="mt-2 space-y-1 text-xs text-zinc-400">
+              {data.revenueBridge.transitionsApplied.length === 0 ? (
+                <p>Sin transiciones registradas.</p>
+              ) : (
+                data.revenueBridge.transitionsApplied.map((item) => (
+                  <p key={`${item.dealId}-${item.externalEventId}`}>{item.dealId} · {item.fromStage} → <span className="text-[#d4e83a]">{item.toStage}</span></p>
+                ))
+              )}
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section className="card p-4">
         <h2 className="text-lg font-semibold">Estado rápido de experimentos y automatizaciones</h2>
         <div className="mt-3 grid gap-3 md:grid-cols-5 text-sm">
           <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">

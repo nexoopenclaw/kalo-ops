@@ -897,3 +897,50 @@ alter table public.risk_workflow_states enable row level security;
 --       and m.user_id = auth.uid()
 --     )
 --   );
+
+-- =====================================================
+-- REVENUE BRIDGE (Sprint 15 scaffold)
+-- =====================================================
+create table if not exists public.integration_event_log (
+  id uuid primary key default gen_random_uuid(),
+  provider text not null check (provider in ('calendly', 'stripe')),
+  external_event_id text not null,
+  status text not null check (status in ('processed', 'ignored', 'failed')),
+  payload jsonb not null default '{}'::jsonb,
+  processed_at timestamptz not null default now(),
+  error text,
+  unique (provider, external_event_id)
+);
+
+create table if not exists public.bridge_transitions (
+  id uuid primary key default gen_random_uuid(),
+  deal_id uuid not null references public.deals(id) on delete cascade,
+  from_stage text not null,
+  to_stage text not null,
+  source_provider text not null check (source_provider in ('calendly', 'stripe')),
+  external_event_id text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists integration_event_log_provider_processed_idx on public.integration_event_log (provider, processed_at desc);
+create index if not exists integration_event_log_status_processed_idx on public.integration_event_log (status, processed_at desc);
+create index if not exists bridge_transitions_deal_created_idx on public.bridge_transitions (deal_id, created_at desc);
+create index if not exists bridge_transitions_provider_created_idx on public.bridge_transitions (source_provider, created_at desc);
+
+alter table public.integration_event_log enable row level security;
+alter table public.bridge_transitions enable row level security;
+
+-- integration_event_log
+-- create policy integration_event_log_org_scope on public.integration_event_log
+--   for all using (auth.role() = 'service_role');
+
+-- bridge_transitions
+-- create policy bridge_transitions_org_scope on public.bridge_transitions
+--   for all using (
+--     exists (
+--       select 1 from public.deals d
+--       join public.memberships m on m.organization_id = d.organization_id
+--       where d.id = bridge_transitions.deal_id
+--       and m.user_id = auth.uid()
+--     )
+--   );
