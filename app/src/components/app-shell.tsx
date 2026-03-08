@@ -9,6 +9,7 @@ const navItems = [
   { href: "/inbox", label: "Inbox" },
   { href: "/crm", label: "CRM" },
   { href: "/automations", label: "Automations" },
+  { href: "/copilot", label: "Copilot" },
   { href: "/attribution", label: "Attribution" },
   { href: "/reportes", label: "Reportes" },
   { href: "/config", label: "Config" },

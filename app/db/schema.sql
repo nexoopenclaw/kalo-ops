@@ -347,4 +347,66 @@ alter table public.automation_logs enable row level security;
 --     )
 --   );
 
+-- =====================================================
+-- AI COPILOT AUDIT (Sprint 7 scaffold)
+-- =====================================================
+create table if not exists public.ai_interactions (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  user_id uuid references auth.users(id),
+  conversation_id uuid references public.conversations(id) on delete set null,
+  deal_id uuid references public.deals(id) on delete set null,
+  feature text not null check (feature in ('suggest', 'classify', 'summarize', 'score')),
+  model_provider text not null default 'mock',
+  model_name text,
+  prompt_template_version text,
+  request_meta jsonb not null default '{}'::jsonb,
+  response_meta jsonb not null default '{}'::jsonb,
+  latency_ms int,
+  token_input int,
+  token_output int,
+  status text not null default 'success' check (status in ('success', 'error')),
+  error_message text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.ai_interaction_events (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  interaction_id uuid not null references public.ai_interactions(id) on delete cascade,
+  event_type text not null check (event_type in ('accepted_suggestion', 'edited_suggestion', 'dismissed_suggestion', 'manual_override')),
+  actor_user_id uuid references auth.users(id),
+  context_meta jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists ai_interactions_org_created_idx on public.ai_interactions (organization_id, created_at desc);
+create index if not exists ai_interactions_feature_created_idx on public.ai_interactions (feature, created_at desc);
+create index if not exists ai_interactions_conversation_idx on public.ai_interactions (conversation_id) where conversation_id is not null;
+create index if not exists ai_interactions_deal_idx on public.ai_interactions (deal_id) where deal_id is not null;
+create index if not exists ai_interaction_events_interaction_created_idx on public.ai_interaction_events (interaction_id, created_at desc);
+
+alter table public.ai_interactions enable row level security;
+alter table public.ai_interaction_events enable row level security;
+
+-- ai_interactions
+-- create policy ai_interactions_org_scope on public.ai_interactions
+--   for all using (
+--     exists (
+--       select 1 from public.memberships m
+--       where m.organization_id = ai_interactions.organization_id
+--       and m.user_id = auth.uid()
+--     )
+--   );
+
+-- ai_interaction_events
+-- create policy ai_interaction_events_org_scope on public.ai_interaction_events
+--   for all using (
+--     exists (
+--       select 1 from public.memberships m
+--       where m.organization_id = ai_interaction_events.organization_id
+--       and m.user_id = auth.uid()
+--     )
+--   );
+
 -- Optional trigger pattern: keep updated_at fresh via trigger before update.
