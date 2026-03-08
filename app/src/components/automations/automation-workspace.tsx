@@ -1,124 +1,93 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AutomationActionType, AutomationTriggerType, AutomationWorkflow } from "@/lib/automation-service";
 
 const triggerLabels: Record<AutomationTriggerType, string> = {
-  silence: "Silence",
+  silence: "Silencio",
   keyword: "Keyword",
-  stage_change: "Stage change",
+  stage_change: "Cambio de etapa",
   booking: "Booking",
-  payment: "Payment",
+  payment: "Pago",
 };
 
 const actionLabels: Record<AutomationActionType, string> = {
-  send_message: "Send message",
-  change_status: "Change status",
-  assign_setter: "Assign setter",
-  notify: "Notify",
-  add_tag: "Add tag",
+  send_message: "Enviar mensaje",
+  change_status: "Cambiar status",
+  assign_setter: "Asignar setter",
+  notify: "Notificar",
+  add_tag: "Añadir tag",
 };
 
-type Props = {
-  initialWorkflows: AutomationWorkflow[];
+type Props = { initialWorkflows: AutomationWorkflow[] };
+
+type ExecutionItem = {
+  id: string;
+  workflowName: string;
+  status: "success" | "failed" | "skipped";
+  reason: string;
+  durationMs: number;
+  startedAt: string;
 };
 
-type WorkflowDraft = {
-  id?: string;
-  name: string;
-  description: string;
-  triggerType: AutomationTriggerType;
-  triggerValue: string;
-  conditionsText: string;
-  actionType: AutomationActionType;
-  actionValue: string;
-};
-
-const emptyDraft: WorkflowDraft = {
-  name: "",
-  description: "",
-  triggerType: "silence",
-  triggerValue: "",
-  conditionsText: "",
-  actionType: "send_message",
-  actionValue: "",
-};
-
-function formatDate(iso: string | null): string {
-  if (!iso) return "Sin ejecución";
-  return new Date(iso).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" });
-}
+type QueueStatus = { total: number; pending: number; running: number; failed: number; completed: number };
 
 export function AutomationWorkspace({ initialWorkflows }: Props) {
   const [workflows, setWorkflows] = useState(initialWorkflows);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [draft, setDraft] = useState<WorkflowDraft>(emptyDraft);
+  const [executions, setExecutions] = useState<ExecutionItem[]>([]);
+  const [queue, setQueue] = useState<QueueStatus>({ total: 0, pending: 0, running: 0, failed: 0, completed: 0 });
+  const [triggerType, setTriggerType] = useState<AutomationTriggerType>("silence");
+  const [triggerValue, setTriggerValue] = useState("");
+  const [contextText, setContextText] = useState('{"conversationId":"conv_2","leadId":"lead_2","leadScore":72}');
 
   const activeCount = useMemo(() => workflows.filter((workflow) => workflow.active).length, [workflows]);
 
-  const openCreate = () => {
-    setDraft(emptyDraft);
-    setDrawerOpen(true);
+  const refreshExecutionCenter = async () => {
+    const [qRes, eRes] = await Promise.all([
+      fetch("/api/automations/queue/status?organizationId=org_1", { cache: "no-store" }),
+      fetch("/api/automations/executions?organizationId=org_1&limit=8", { cache: "no-store" }),
+    ]);
+    const qJson = (await qRes.json()) as { data: QueueStatus };
+    const eJson = (await eRes.json()) as { data: ExecutionItem[] };
+    setQueue(qJson.data);
+    setExecutions(eJson.data);
   };
 
-  const openEdit = (workflow: AutomationWorkflow) => {
-    setDraft({
-      id: workflow.id,
-      name: workflow.name,
-      description: workflow.description ?? "",
-      triggerType: workflow.trigger.type,
-      triggerValue: workflow.trigger.value ?? workflow.trigger.windowMinutes?.toString() ?? "",
-      conditionsText: workflow.conditions.map((condition) => `${condition.field} ${condition.operator} ${condition.value ?? ""}`.trim()).join("\n"),
-      actionType: workflow.actions[0]?.type ?? "send_message",
-      actionValue: workflow.actions[0]?.value ?? "",
-    });
-    setDrawerOpen(true);
-  };
+  useEffect(() => {
+    void refreshExecutionCenter();
+  }, []);
 
-  const toggleWorkflow = (workflowId: string) => {
-    setWorkflows((prev) =>
-      prev.map((workflow) => (workflow.id === workflowId ? { ...workflow, active: !workflow.active, updatedAt: new Date().toISOString() } : workflow)),
-    );
-  };
+  const runManualTrigger = async () => {
+    let parsed: Record<string, unknown> = {};
+    try {
+      parsed = JSON.parse(contextText) as Record<string, unknown>;
+    } catch {
+      alert("JSON de contexto inválido");
+      return;
+    }
 
-  const submitDraft = () => {
-    if (!draft.name.trim()) return;
-
-    const now = new Date().toISOString();
-    const mappedConditions = draft.conditionsText
-      .split("\n")
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .map((item, index) => ({ id: `cond_local_${index}_${Date.now()}`, field: item, operator: "contains" as const, value: "true" }));
-
-    const mappedWorkflow: AutomationWorkflow = {
-      id: draft.id ?? `wf_local_${Date.now()}`,
-      organizationId: "org_1",
-      name: draft.name,
-      description: draft.description,
-      trigger: {
-        type: draft.triggerType,
-        value: draft.triggerValue || undefined,
-        windowMinutes: draft.triggerType === "silence" ? Number(draft.triggerValue || 30) : undefined,
-      },
-      conditions: mappedConditions,
-      actions: [{ id: `act_local_${Date.now()}`, type: draft.actionType, value: draft.actionValue }],
-      active: true,
-      executionCount: draft.id ? workflows.find((workflow) => workflow.id === draft.id)?.executionCount ?? 0 : 0,
-      lastRunAt: draft.id ? workflows.find((workflow) => workflow.id === draft.id)?.lastRunAt ?? null : null,
-      createdAt: draft.id ? workflows.find((workflow) => workflow.id === draft.id)?.createdAt ?? now : now,
-      updatedAt: now,
-    };
-
-    setWorkflows((prev) => {
-      if (draft.id) {
-        return prev.map((workflow) => (workflow.id === draft.id ? mappedWorkflow : workflow));
-      }
-      return [mappedWorkflow, ...prev];
+    await fetch("/api/automations/execute", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ organizationId: "org_1", triggerType, triggerValue: triggerValue || undefined, context: parsed }),
     });
 
-    setDrawerOpen(false);
-    setDraft(emptyDraft);
+    await refreshExecutionCenter();
+  };
+
+  const enqueueAndRun = async () => {
+    await fetch("/api/automations/queue/enqueue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ organizationId: "org_1", triggerType, triggerValue: triggerValue || undefined, context: { conversationId: "conv_1", leadId: "lead_1", leadScore: 88 } }),
+    });
+    await fetch("/api/automations/queue/run-next", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ organizationId: "org_1" }),
+    });
+
+    await refreshExecutionCenter();
   };
 
   return (
@@ -127,174 +96,91 @@ export function AutomationWorkspace({ initialWorkflows }: Props) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold">Automation Engine</h1>
-            <p className="text-sm text-zinc-400">No-code workflow builder mock para trigger → conditions → actions.</p>
+            <p className="text-sm text-zinc-400">Constructor no-code de workflows con ejecución segura en mock.</p>
           </div>
-          <button onClick={openCreate} className="rounded-lg border border-[#d4e83a]/45 bg-[#d4e83a]/15 px-4 py-2 text-sm font-medium text-[#d4e83a]">
-            + Nuevo workflow
-          </button>
+          <span className="rounded-md border border-[#d4e83a]/35 bg-[#d4e83a]/10 px-2 py-1 text-xs text-[#d4e83a]">{activeCount} activos</span>
         </div>
-      </section>
-
-      <section className="grid gap-3 md:grid-cols-3">
-        <article className="card p-4">
-          <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Trigger</p>
-          <h3 className="mt-2 text-lg font-semibold">Evento de entrada</h3>
-          <p className="mt-1 text-sm text-zinc-400">Silence, keyword, stage change, booking o payment.</p>
-        </article>
-        <article className="card p-4">
-          <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Conditions</p>
-          <h3 className="mt-2 text-lg font-semibold">Reglas de filtrado</h3>
-          <p className="mt-1 text-sm text-zinc-400">Campo + operador para segmentar qué leads ejecutan la automatización.</p>
-        </article>
-        <article className="card p-4">
-          <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Actions</p>
-          <h3 className="mt-2 text-lg font-semibold">Salida operacional</h3>
-          <p className="mt-1 text-sm text-zinc-400">Mensajes, status, asignaciones, avisos internos y tags.</p>
-        </article>
       </section>
 
       <section className="card p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Workflows</h2>
-          <span className="rounded-md border border-[#d4e83a]/35 bg-[#d4e83a]/10 px-2 py-1 text-xs text-[#d4e83a]">{activeCount} activos</span>
-        </div>
-
-        <div className="space-y-2">
+        <h2 className="text-lg font-semibold">Workflows</h2>
+        <div className="mt-3 space-y-2">
           {workflows.map((workflow) => (
             <article key={workflow.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h3 className="font-semibold text-zinc-100">{workflow.name}</h3>
-                  <p className="text-sm text-zinc-400">{workflow.description || "Sin descripción"}</p>
-                  <p className="mt-1 text-xs text-zinc-500">
-                    Trigger: <span className="text-zinc-300">{triggerLabels[workflow.trigger.type]}</span>
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => openEdit(workflow)}
-                    className="rounded-md border border-white/15 px-3 py-1 text-xs text-zinc-300 hover:border-[#d4e83a]/30 hover:text-[#d4e83a]"
-                  >
-                    Editar
-                  </button>
-                  <button
-                    onClick={() => toggleWorkflow(workflow.id)}
-                    className={`rounded-md border px-3 py-1 text-xs ${
-                      workflow.active
-                        ? "border-emerald-400/45 bg-emerald-500/10 text-emerald-200"
-                        : "border-zinc-500/45 bg-zinc-500/10 text-zinc-300"
-                    }`}
-                  >
-                    {workflow.active ? "Activo" : "Inactivo"}
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-3 grid gap-2 text-sm md:grid-cols-3">
-                <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
-                  <p className="text-xs text-zinc-500">Exec count</p>
-                  <p className="text-[#d4e83a]">{workflow.executionCount}</p>
-                </div>
-                <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 md:col-span-2">
-                  <p className="text-xs text-zinc-500">Last run</p>
-                  <p className="text-zinc-300">{formatDate(workflow.lastRunAt)}</p>
-                </div>
-              </div>
+              <p className="font-semibold">{workflow.name}</p>
+              <p className="text-sm text-zinc-400">{workflow.description || "Sin descripción"}</p>
+              <p className="text-xs text-zinc-500 mt-1">Trigger: {triggerLabels[workflow.trigger.type]} · Exec: {workflow.executionCount}</p>
+              <button
+                onClick={() => setWorkflows((prev) => prev.map((item) => (item.id === workflow.id ? { ...item, active: !item.active } : item)))}
+                className={`mt-2 rounded-md border px-3 py-1 text-xs ${workflow.active ? "border-emerald-400/45 bg-emerald-500/10 text-emerald-200" : "border-zinc-500/45 bg-zinc-500/10 text-zinc-300"}`}
+              >
+                {workflow.active ? "Activo" : "Inactivo"}
+              </button>
             </article>
           ))}
         </div>
       </section>
 
-      {drawerOpen && (
-        <div className="fixed inset-0 z-40 flex justify-end bg-black/60" onClick={() => setDrawerOpen(false)}>
-          <aside className="h-full w-full max-w-xl border-l border-white/10 bg-[#0b1320] p-5" onClick={(event) => event.stopPropagation()}>
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-xl font-semibold">{draft.id ? "Editar workflow" : "Crear workflow"}</h3>
-              <button className="rounded-lg border border-white/15 px-2 py-1 text-sm text-zinc-300" onClick={() => setDrawerOpen(false)}>
-                Cerrar
-              </button>
+      <section className="card p-4">
+        <h2 className="text-lg font-semibold">Execution Center</h2>
+        <p className="text-sm text-zinc-400">Fiabilidad del executor + cola en memoria (modo safe mock).</p>
+
+        <div className="mt-3 grid gap-2 sm:grid-cols-4">
+          {[
+            ["Queue size", queue.total],
+            ["Pendientes", queue.pending],
+            ["Running", queue.running],
+            ["Fallidas", queue.failed],
+          ].map(([label, value]) => (
+            <div key={String(label)} className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+              <p className="text-xs text-zinc-500">{label}</p>
+              <p className="text-[#d4e83a] text-lg">{value}</p>
             </div>
-
-            <div className="space-y-3">
-              <input
-                value={draft.name}
-                onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))}
-                placeholder="Nombre del workflow"
-                className="w-full rounded-lg border border-white/15 bg-[#101827] px-3 py-2 text-sm outline-none focus:border-[#d4e83a]/45"
-              />
-              <textarea
-                rows={2}
-                value={draft.description}
-                onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))}
-                placeholder="Descripción operacional"
-                className="w-full rounded-lg border border-white/15 bg-[#101827] px-3 py-2 text-sm outline-none focus:border-[#d4e83a]/45"
-              />
-
-              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                <p className="mb-2 text-xs uppercase tracking-[0.18em] text-zinc-500">Trigger</p>
-                <div className="grid gap-2 md:grid-cols-2">
-                  <select
-                    value={draft.triggerType}
-                    onChange={(event) => setDraft((prev) => ({ ...prev, triggerType: event.target.value as AutomationTriggerType }))}
-                    className="rounded-lg border border-white/15 bg-[#101827] px-3 py-2 text-sm"
-                  >
-                    {Object.entries(triggerLabels).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    value={draft.triggerValue}
-                    onChange={(event) => setDraft((prev) => ({ ...prev, triggerValue: event.target.value }))}
-                    placeholder="Valor trigger (keyword, minutos, stage...)"
-                    className="rounded-lg border border-white/15 bg-[#101827] px-3 py-2 text-sm"
-                  />
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                <p className="mb-2 text-xs uppercase tracking-[0.18em] text-zinc-500">Conditions</p>
-                <textarea
-                  rows={4}
-                  value={draft.conditionsText}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, conditionsText: event.target.value }))}
-                  placeholder="Una condición por línea"
-                  className="w-full rounded-lg border border-white/15 bg-[#101827] px-3 py-2 text-sm"
-                />
-              </div>
-
-              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                <p className="mb-2 text-xs uppercase tracking-[0.18em] text-zinc-500">Actions</p>
-                <div className="grid gap-2 md:grid-cols-2">
-                  <select
-                    value={draft.actionType}
-                    onChange={(event) => setDraft((prev) => ({ ...prev, actionType: event.target.value as AutomationActionType }))}
-                    className="rounded-lg border border-white/15 bg-[#101827] px-3 py-2 text-sm"
-                  >
-                    {Object.entries(actionLabels).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    value={draft.actionValue}
-                    onChange={(event) => setDraft((prev) => ({ ...prev, actionValue: event.target.value }))}
-                    placeholder="Payload de acción"
-                    className="rounded-lg border border-white/15 bg-[#101827] px-3 py-2 text-sm"
-                  />
-                </div>
-              </div>
-
-              <button onClick={submitDraft} className="rounded-lg border border-[#d4e83a]/45 bg-[#d4e83a]/15 px-4 py-2 text-sm font-medium text-[#d4e83a]">
-                {draft.id ? "Guardar cambios" : "Crear workflow"}
-              </button>
-            </div>
-          </aside>
+          ))}
         </div>
-      )}
+
+        <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
+          <p className="text-xs uppercase tracking-[0.18em] text-zinc-500 mb-2">Trigger manual (safe mock)</p>
+          <div className="grid gap-2 md:grid-cols-3">
+            <select value={triggerType} onChange={(e) => setTriggerType(e.target.value as AutomationTriggerType)} className="rounded-lg border border-white/15 bg-[#101827] px-3 py-2 text-sm">
+              {Object.entries(triggerLabels).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+            <input value={triggerValue} onChange={(e) => setTriggerValue(e.target.value)} placeholder="Valor opcional" className="rounded-lg border border-white/15 bg-[#101827] px-3 py-2 text-sm" />
+            <button onClick={runManualTrigger} className="rounded-lg border border-[#d4e83a]/45 bg-[#d4e83a]/15 px-4 py-2 text-sm font-medium text-[#d4e83a]">Ejecutar ahora</button>
+          </div>
+          <textarea rows={3} value={contextText} onChange={(e) => setContextText(e.target.value)} className="mt-2 w-full rounded-lg border border-white/15 bg-[#101827] px-3 py-2 text-sm" />
+          <button onClick={enqueueAndRun} className="mt-2 rounded-lg border border-white/15 px-3 py-2 text-xs text-zinc-300 hover:border-[#d4e83a]/35 hover:text-[#d4e83a]">Encolar + run-next</button>
+        </div>
+
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="text-left text-zinc-500">
+              <tr>
+                <th className="py-2 pr-3">Workflow</th>
+                <th className="py-2 pr-3">Estado</th>
+                <th className="py-2 pr-3">Razón</th>
+                <th className="py-2 pr-3">Duración</th>
+                <th className="py-2 pr-3">Inicio</th>
+              </tr>
+            </thead>
+            <tbody>
+              {executions.map((item) => (
+                <tr key={item.id} className="border-t border-white/10 text-zinc-300">
+                  <td className="py-2 pr-3">{item.workflowName}</td>
+                  <td className="py-2 pr-3">
+                    <span className={`rounded px-2 py-0.5 text-xs ${item.status === "success" ? "bg-emerald-500/15 text-emerald-200" : item.status === "failed" ? "bg-red-500/15 text-red-200" : "bg-zinc-500/20 text-zinc-200"}`}>{item.status}</span>
+                  </td>
+                  <td className="py-2 pr-3">{item.reason}</td>
+                  <td className="py-2 pr-3">{item.durationMs} ms</td>
+                  <td className="py-2 pr-3">{new Date(item.startedAt).toLocaleString("es-ES")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </main>
   );
 }

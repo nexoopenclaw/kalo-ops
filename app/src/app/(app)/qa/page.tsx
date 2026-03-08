@@ -1,22 +1,22 @@
 import Link from "next/link";
 
 const checks = [
-  { module: "Hoy Command Center", status: "PASS", detail: "Ruta /hoy activa en navegación con vista unificada de operación diaria." },
-  { module: "Revenue Bridge panel", status: "PASS", detail: "Panel operativo en /hoy con eventos Calendly/Stripe, transiciones y métricas fail/ignored." },
-  { module: "Bridge service", status: "PASS", detail: "src/lib/revenue-bridge-service.ts implementa idempotencia + mapeo a deal stage." },
-  { module: "Webhook Calendly", status: "PASS", detail: "POST /api/webhooks/calendly con parser seguro, firma placeholder y handling NOT_CONFIGURED." },
-  { module: "Webhook Stripe", status: "PASS", detail: "POST /api/webhooks/stripe con parser seguro, firma placeholder y handling NOT_CONFIGURED." },
-  { module: "Deal stage history", status: "PASS", detail: "Bridge reutiliza crmService.updateDealStage y agrega nota auditada en deal." },
-  { module: "Schema Sprint 15", status: "PASS", detail: "Tablas integration_event_log y bridge_transitions con índices + RLS stubs." },
-  { module: "UX premium dark", status: "PASS", detail: "Visual dark consistente con acento #d4e83a y copy operacional en español." },
+  { module: "Automation executor", status: "PASS", detail: "src/lib/automation-executor.ts ejecuta trigger/conditions/actions contra estado in-memory." },
+  { module: "Acciones soportadas", status: "PASS", detail: "send_message, change_status, assign_setter, notify, add_tag con resultado por acción." },
+  { module: "Execution logs", status: "PASS", detail: "Logs con status, razón, duración (ms), timestamps y trigger payload." },
+  { module: "Queue reliability", status: "PASS", detail: "src/lib/automation-queue.ts con retry metadata (retryCount, maxRetries, nextRetryAt, lastError)." },
+  { module: "Automation APIs", status: "PASS", detail: "Nuevos endpoints execute / queue enqueue/run-next / executions / queue status." },
+  { module: "Execution Center UI", status: "PASS", detail: "Nueva sección en /automations con métricas de cola, tabla reciente y trigger manual safe mock." },
+  { module: "Schema Sprint 16", status: "PASS", detail: "Tablas automation_executions + automation_queue con índices y stubs RLS por organization_id." },
+  { module: "UX premium dark", status: "PASS", detail: "Estética dark consistente, acento #d4e83a y copy operacional en español." },
 ];
 
 export default function QAPage() {
   return (
     <main className="space-y-4">
       <section className="card p-4">
-        <h1 className="text-2xl font-semibold">QA interno · Sprint 15</h1>
-        <p className="text-sm text-zinc-400">Checklist operativo del cockpit + Revenue Bridge antes de deploy.</p>
+        <h1 className="text-2xl font-semibold">QA interno · Sprint 16</h1>
+        <p className="text-sm text-zinc-400">Checklist de fiabilidad para Automation Executor + Queue.</p>
       </section>
 
       <section className="card p-4">
@@ -34,40 +34,25 @@ export default function QAPage() {
       </section>
 
       <section className="card p-4 text-sm">
-        <h2 className="text-lg font-semibold">Bloque de aceptación · Keys-ready</h2>
-        <ol className="mt-3 list-decimal space-y-2 pl-5 text-zinc-300">
-          <li>
-            Ir a <Link href="/integraciones" className="text-[#d4e83a] underline">/integraciones</Link> y validar estado por proveedor (Configurado/Missing).
-          </li>
-          <li>
-            GET <code>/api/integrations/status</code> debe devolver lista completa de proveedores y <code>missingKeys</code> sin exponer secretos.
-          </li>
-          <li>
-            POST <code>/api/integrations/test/:provider</code> debe responder <code>ok=true</code> con <code>status=ok</code> o <code>status=not_configured</code> de forma graceful.
-          </li>
-          <li>
-            Revisar <code>docs/GO_LIVE_KEYS_CHECKLIST.md</code> para checklist de carga en Vercel + Supabase y smoke tests iniciales.
-          </li>
-        </ol>
-      </section>
-
-      <section className="card p-4 text-sm">
         <h2 className="text-lg font-semibold">Pruebas manuales rápidas</h2>
         <ol className="mt-3 list-decimal space-y-2 pl-5 text-zinc-300">
           <li>
-            Ir a <Link href="/hoy" className="text-[#d4e83a] underline">/hoy</Link> y validar bloque nuevo <strong>Revenue Bridge</strong> (eventos, transiciones, fallidos/ignorados).
+            Ir a <Link href="/automations" className="text-[#d4e83a] underline">/automations</Link> y validar bloque <strong>Execution Center</strong>.
           </li>
           <li>
-            POST <code>/api/webhooks/calendly</code> con header <code>x-kalo-mock-signature: dev-ok</code> + payload ejemplo: deal pasa a <code>booked</code>.
+            Ejecutar trigger manual (safe mock) y confirmar nueva fila en tabla de ejecuciones.
           </li>
           <li>
-            POST <code>/api/webhooks/stripe</code> con header <code>x-kalo-mock-signature: dev-ok</code> + payload ejemplo: deal pasa a <code>won</code>.
+            Encolar job con <strong>Encolar + run-next</strong> y verificar métricas: pending/running/failed.
           </li>
           <li>
-            Reenviar mismo <code>external_event_id</code> y validar idempotencia (status ignored / sin transición duplicada).
+            GET <code>/api/automations/executions?organizationId=org_1</code> devuelve logs con <code>durationMs</code> y <code>reason</code>.
           </li>
           <li>
-            Confirmar que <code>/api/hoy/summary</code> incluye <code>revenueBridge</code> en el payload y que el style dark premium + <code>#d4e83a</code> se mantiene.
+            GET <code>/api/automations/queue/status?organizationId=org_1</code> refleja estado de cola y reintentos.
+          </li>
+          <li>
+            Revisar <code>docs/SPRINT_16_AUTOMATION_EXECUTOR.md</code> para runbook completo antes de deploy.
           </li>
         </ol>
       </section>

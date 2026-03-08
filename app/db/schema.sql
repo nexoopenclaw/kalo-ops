@@ -324,8 +324,43 @@ create index if not exists automations_org_updated_idx on public.automations (or
 create index if not exists automation_logs_org_started_idx on public.automation_logs (organization_id, started_at desc);
 create index if not exists automation_logs_automation_started_idx on public.automation_logs (automation_id, started_at desc);
 
+create table if not exists public.automation_executions (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  automation_id uuid references public.automations(id) on delete set null,
+  workflow_name text not null,
+  status text not null check (status in ('success', 'failed', 'skipped')),
+  reason text,
+  duration_ms int not null default 0 check (duration_ms >= 0),
+  trigger_payload jsonb not null default '{}'::jsonb,
+  action_results jsonb not null default '[]'::jsonb,
+  started_at timestamptz not null default now(),
+  finished_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.automation_queue (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  status text not null default 'pending' check (status in ('pending', 'running', 'failed', 'completed')),
+  payload jsonb not null default '{}'::jsonb,
+  retry_count int not null default 0 check (retry_count >= 0),
+  max_retries int not null default 2 check (max_retries >= 0),
+  last_error text,
+  next_retry_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists automation_executions_org_started_idx on public.automation_executions (organization_id, started_at desc);
+create index if not exists automation_executions_org_status_idx on public.automation_executions (organization_id, status, created_at desc);
+create index if not exists automation_queue_org_status_idx on public.automation_queue (organization_id, status, updated_at desc);
+create index if not exists automation_queue_retry_idx on public.automation_queue (organization_id, next_retry_at) where next_retry_at is not null;
+
 alter table public.automations enable row level security;
 alter table public.automation_logs enable row level security;
+alter table public.automation_executions enable row level security;
+alter table public.automation_queue enable row level security;
 
 -- automations
 -- create policy automations_org_scope on public.automations
@@ -343,6 +378,26 @@ alter table public.automation_logs enable row level security;
 --     exists (
 --       select 1 from public.memberships m
 --       where m.organization_id = automation_logs.organization_id
+--       and m.user_id = auth.uid()
+--     )
+--   );
+
+-- automation_executions
+-- create policy automation_executions_org_scope on public.automation_executions
+--   for all using (
+--     exists (
+--       select 1 from public.memberships m
+--       where m.organization_id = automation_executions.organization_id
+--       and m.user_id = auth.uid()
+--     )
+--   );
+
+-- automation_queue
+-- create policy automation_queue_org_scope on public.automation_queue
+--   for all using (
+--     exists (
+--       select 1 from public.memberships m
+--       where m.organization_id = automation_queue.organization_id
 --       and m.user_id = auth.uid()
 --     )
 --   );
