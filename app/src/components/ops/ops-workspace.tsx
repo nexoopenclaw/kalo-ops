@@ -13,6 +13,11 @@ type ChannelMetric = {
 type OpsWorkspaceProps = {
   initialHealth: AdapterHealth[];
   initialMetrics: ChannelMetric[];
+  diagnostics: {
+    queueDepth: { automation: number; webhookRetry: number; digestRuns: number };
+    webhookRetryBacklog: number;
+    lastDigestRun: { digestType: "daily" | "weekly"; generatedAt: string } | null;
+  };
 };
 
 const channelLabel: Record<SupportedChannel, string> = {
@@ -21,7 +26,7 @@ const channelLabel: Record<SupportedChannel, string> = {
   email: "Email",
 };
 
-export function OpsWorkspace({ initialHealth, initialMetrics }: OpsWorkspaceProps) {
+export function OpsWorkspace({ initialHealth, initialMetrics, diagnostics }: OpsWorkspaceProps) {
   const [health, setHealth] = useState(initialHealth);
   const [metrics] = useState(initialMetrics);
   const [busy, setBusy] = useState<string | null>(null);
@@ -60,6 +65,17 @@ export function OpsWorkspace({ initialHealth, initialMetrics }: OpsWorkspaceProp
             <p className="text-sm text-zinc-300">Backlog: {metric.backlog}</p>
           </article>
         ))}
+      </section>
+
+      <section className="card p-4">
+        <h2 className="text-lg font-semibold">Diagnóstico operativo</h2>
+        <div className="mt-3 grid gap-2 md:grid-cols-4 text-sm">
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">Worker · cola automation: <span className="text-[#d4e83a]">{diagnostics.queueDepth.automation}</span></div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">Webhook retry queue: <span className="text-[#d4e83a]">{diagnostics.queueDepth.webhookRetry}</span></div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">Digest runs: <span className="text-[#d4e83a]">{diagnostics.queueDepth.digestRuns}</span></div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">Backlog retry: <span className="text-[#d4e83a]">{diagnostics.webhookRetryBacklog}</span></div>
+        </div>
+        <p className="mt-2 text-xs text-zinc-400">Último digest: {diagnostics.lastDigestRun ? `${diagnostics.lastDigestRun.digestType} · ${new Date(diagnostics.lastDigestRun.generatedAt).toLocaleString("es-ES")}` : "Sin ejecuciones"}</p>
       </section>
 
       <section className="card p-4">

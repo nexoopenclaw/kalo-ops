@@ -1,6 +1,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { fail, ok } from "@/lib/api-response";
 import { revenueBridgeService, type StripePaymentEvent } from "@/lib/revenue-bridge-service";
+import { checkRateLimit, getClientKey } from "@/lib/rate-limit";
+import { getRequestId, logger } from "@/lib/logger";
 
 type StripeWebhookPayload = {
   id?: string;
@@ -58,6 +60,10 @@ function parseStripePayment(payload: StripeWebhookPayload): StripePaymentEvent |
 }
 
 export async function POST(request: Request) {
+  const requestId = getRequestId(request);
+  const limit = checkRateLimit({ key: getClientKey(request, "webhook_stripe"), limit: 60, windowMs: 60_000 });
+  if (!limit.allowed) return fail({ code: "RATE_LIMITED", message: "Demasiados webhooks Stripe" }, 429);
+
   const rawBody = await request.text();
   const signature = request.headers.get("stripe-signature");
   const mockSignature = request.headers.get("x-kalo-mock-signature");
@@ -96,5 +102,6 @@ export async function POST(request: Request) {
   }
 
   const result = await revenueBridgeService.processStripePayment(paymentEvent);
+  logger.info("Stripe webhook processed", { requestId, route: "/api/webhooks/stripe", externalId: paymentEvent.id });
   return ok(result);
 }

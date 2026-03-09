@@ -1,6 +1,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { processWebhook } from "@/lib/webhook-engine";
+import { checkRateLimit, getClientKey } from "@/lib/rate-limit";
+import { getRequestId, logger } from "@/lib/logger";
 
 type MetaWebhookChange = {
   field?: string;
@@ -24,58 +26,36 @@ type MetaWebhookPayload = {
 
 function verifyMetaSignature(rawBody: string, signatureHeader: string | null): boolean {
   const appSecret = process.env.META_APP_SECRET;
-  if (!appSecret || !signatureHeader) {
-    return true;
-  }
-
+  if (!appSecret || !signatureHeader) return true;
   const expected = `sha256=${createHmac("sha256", appSecret).update(rawBody).digest("hex")}`;
-
   const expectedBuf = Buffer.from(expected);
   const receivedBuf = Buffer.from(signatureHeader);
-
-  if (expectedBuf.length !== receivedBuf.length) {
-    return false;
-  }
-
+  if (expectedBuf.length !== receivedBuf.length) return false;
   return timingSafeEqual(expectedBuf, receivedBuf);
 }
 
 function parseWebhookEvents(payload: MetaWebhookPayload) {
-  const parsed = (payload.entry ?? []).flatMap((entry) =>
+  return (payload.entry ?? []).flatMap((entry) =>
     (entry.changes ?? []).flatMap((change) => {
       const value = change.value ?? {};
       const messages = value.messages ?? [];
       const statuses = value.statuses ?? [];
-
       return [
-        ...messages.map((message) => ({
-          type: "message" as const,
-          field: change.field ?? "messages",
-          entryId: entry.id ?? "unknown",
-          timestamp: entry.time ?? Date.now(),
-          message,
-        })),
-        ...statuses.map((status) => ({
-          type: "status" as const,
-          field: change.field ?? "statuses",
-          entryId: entry.id ?? "unknown",
-          timestamp: entry.time ?? Date.now(),
-          status,
-        })),
+        ...messages.map((message) => ({ type: "message" as const, field: change.field ?? "messages", entryId: entry.id ?? "unknown", timestamp: entry.time ?? Date.now(), message })),
+        ...statuses.map((status) => ({ type: "status" as const, field: change.field ?? "statuses", entryId: entry.id ?? "unknown", timestamp: entry.time ?? Date.now(), status })),
       ];
     }),
   );
-
-  return parsed;
 }
 
 export async function POST(request: Request) {
+  const requestId = getRequestId(request);
+  const limit = checkRateLimit({ key: getClientKey(request, "webhook_meta"), limit: 120, windowMs: 60_000 });
+  if (!limit.allowed) return NextResponse.json({ ok: false, error: "Rate limited" }, { status: 429 });
+
   const rawBody = await request.text();
   const signature = request.headers.get("x-hub-signature-256");
-
-  if (!verifyMetaSignature(rawBody, signature)) {
-    return NextResponse.json({ ok: false, error: "Invalid signature" }, { status: 401 });
-  }
+  if (!verifyMetaSignature(rawBody, signature)) return NextResponse.json({ ok: false, error: "Invalid signature" }, { status: 401 });
 
   let payload: MetaWebhookPayload;
   try {
@@ -85,7 +65,6 @@ export async function POST(request: Request) {
   }
 
   const events = parseWebhookEvents(payload);
-
   const processed = await Promise.all(
     events.map((event, index) =>
       processWebhook({
@@ -107,5 +86,6 @@ export async function POST(request: Request) {
     ),
   );
 
+  logger.info("Meta webhook processed", { requestId, route: "/api/webhooks/meta", receivedEvents: events.length });
   return NextResponse.json({ ok: true, receivedEvents: events.length, processed });
 }

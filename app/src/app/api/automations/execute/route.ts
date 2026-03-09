@@ -3,8 +3,17 @@ import { automationExecutor, type AutomationTriggerPayload } from "@/lib/automat
 import { recordExecution } from "@/lib/db/repositories/automations-repository";
 import { fail, ok } from "@/lib/api-response";
 import { requireRole } from "@/lib/authz";
+import { checkRateLimit, getClientKey } from "@/lib/rate-limit";
+import { getRequestId, logger } from "@/lib/logger";
 
 export async function POST(request: Request) {
+  const requestId = getRequestId(request);
+  const limit = checkRateLimit({ key: getClientKey(request, "automations_execute"), limit: 20, windowMs: 60_000 });
+  if (!limit.allowed) {
+    logger.warn("Rate limit exceeded on automations execute", { requestId, route: "/api/automations/execute" });
+    return fail({ code: "RATE_LIMITED", message: "Demasiadas ejecuciones por minuto" }, 429);
+  }
+
   try {
     const ctx = await resolveDbContext(request);
     const denied = requireRole(ctx, ["owner", "admin", "setter", "closer"]);
@@ -30,6 +39,7 @@ export async function POST(request: Request) {
       });
     }
 
+    logger.info("Automation execute completed", { requestId, route: "/api/automations/execute", organizationId: ctx.organizationId, executions: executions.length });
     return ok(executions, 202);
   } catch (error) {
     if (error instanceof AuthContextError) return fail({ code: error.code, message: error.message }, error.status);
