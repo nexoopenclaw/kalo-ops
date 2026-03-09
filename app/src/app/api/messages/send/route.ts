@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
 import { inboxService, type Channel } from "@/lib/inbox-service";
+import { resolveDbContext, AuthContextError } from "@/lib/db/context";
+import { fail, ok } from "@/lib/api-response";
+import { requireRole } from "@/lib/authz";
 
 type SendMessageBody = {
-  organizationId?: string;
   conversationId?: string;
   channel?: Channel;
   body?: string;
@@ -13,33 +14,29 @@ export async function POST(request: Request) {
   let payload: SendMessageBody;
 
   try {
+    const ctx = await resolveDbContext(request);
+    const denied = requireRole(ctx, ["owner", "admin", "setter", "closer"]);
+    if (denied) return denied;
+
     payload = (await request.json()) as SendMessageBody;
-  } catch {
-    return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
+
+    const { conversationId, channel, body, senderUserId } = payload;
+
+    if (!conversationId || !channel || !body?.trim()) {
+      return fail({ code: "VALIDATION_ERROR", message: "conversationId, channel y body son obligatorios" }, 400);
+    }
+
+    const result = await inboxService.sendMessage({
+      organizationId: ctx.organizationId,
+      conversationId,
+      channel,
+      body: body.trim(),
+      senderUserId,
+    });
+
+    return ok(result, 202);
+  } catch (error) {
+    if (error instanceof AuthContextError) return fail({ code: error.code, message: error.message }, error.status);
+    return fail({ code: "INTERNAL_ERROR", message: error instanceof Error ? error.message : "Unexpected error" }, 500);
   }
-
-  const { organizationId, conversationId, channel, body, senderUserId } = payload;
-
-  if (!organizationId || !conversationId || !channel || !body?.trim()) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "organizationId, conversationId, channel y body son obligatorios",
-      },
-      { status: 400 },
-    );
-  }
-
-  const result = await inboxService.sendMessage({
-    organizationId,
-    conversationId,
-    channel,
-    body: body.trim(),
-    senderUserId,
-  });
-
-  // TODO(Meta Graph API): replace mock delivery with live dispatch call + webhook reconciliation.
-  // TODO(Supabase): persist outbound message + update conversation snapshot counters.
-
-  return NextResponse.json({ ok: true, data: result }, { status: 202 });
 }

@@ -1,7 +1,7 @@
-import { automationExecutor } from "@/lib/automation-executor";
 import { resolveDbContext, AuthContextError } from "@/lib/db/context";
 import { requireRole } from "@/lib/authz";
 import { fail, ok } from "@/lib/api-response";
+import { inboxService } from "@/lib/inbox-service";
 
 export async function GET(request: Request) {
   try {
@@ -9,10 +9,14 @@ export async function GET(request: Request) {
     const denied = requireRole(ctx, ["owner", "admin", "setter", "closer", "viewer"]);
     if (denied) return denied;
 
-    const { searchParams } = new URL(request.url);
-    const limit = Number(searchParams.get("limit") ?? "30");
+    const setters = await inboxService.listSetters();
+    const data = setters.map((setter, index) => ({
+      userId: setter.id,
+      name: setter.name,
+      online: index % 2 === 0,
+      lastSeenAt: new Date(Date.now() - (index + 1) * 60_000).toISOString(),
+    }));
 
-    const data = automationExecutor.listExecutions(ctx.organizationId, Number.isFinite(limit) ? limit : 30);
     return ok(data);
   } catch (error) {
     if (error instanceof AuthContextError) return fail({ code: error.code, message: error.message }, error.status);

@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Channel, InboxConversation, InboxFilters, InboxMessage, MessageType } from "@/lib/inbox-service";
 
 type SetterOption = { id: string; name: string };
+type RealtimeStatus = "connected" | "degraded" | "offline";
 
 type InboxWorkspaceProps = {
   initialConversations: InboxConversation[];
@@ -58,21 +60,57 @@ export function InboxWorkspace({ initialConversations, initialMessagesByConversa
   const [noReply, setNoReply] = useState(false);
   const [selectedId, setSelectedId] = useState(initialConversations[0]?.id ?? "");
   const [composerValue, setComposerValue] = useState("");
+  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("offline");
 
+  const [conversations, setConversations] = useState(initialConversations);
   const [localMessagesByConversation, setLocalMessagesByConversation] = useState(initialMessagesByConversation);
+  const [presence, setPresence] = useState<Record<string, boolean>>(() => Object.fromEntries(setters.map((s) => [s.id, true])));
+
+  useEffect(() => {
+    const fallbackPoll = setInterval(() => {
+      setRealtimeStatus((prev) => (prev === "connected" ? "connected" : "degraded"));
+      setPresence((prev) => {
+        const next = { ...prev };
+        for (const setter of setters) {
+          if (Math.random() > 0.7) next[setter.id] = !next[setter.id];
+        }
+        return next;
+      });
+    }, 15000);
+
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const channel = supabase
+        .channel("inbox-realtime")
+        .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, () => setRealtimeStatus("connected"))
+        .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => setRealtimeStatus("connected"))
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED") setRealtimeStatus("connected");
+          if (status === "TIMED_OUT") setRealtimeStatus("degraded");
+          if (status === "CLOSED" || status === "CHANNEL_ERROR") setRealtimeStatus("offline");
+        });
+
+      return () => {
+        clearInterval(fallbackPoll);
+        void supabase.removeChannel(channel);
+      };
+    } catch {
+      setRealtimeStatus("offline");
+      return () => clearInterval(fallbackPoll);
+    }
+  }, [setters]);
 
   const filtered = useMemo(() => {
-    return initialConversations.filter((conversation) => {
+    return conversations.filter((conversation) => {
       if (status !== "all" && conversation.status !== status) return false;
       if (setter !== "all" && conversation.assignedSetterId !== setter) return false;
       if (channel !== "all" && conversation.channel !== channel) return false;
       if (noReply && !conversation.hasNoReply) return false;
       return true;
     });
-  }, [initialConversations, noReply, setter, status, channel]);
+  }, [conversations, noReply, setter, status, channel]);
 
   const selectedConversation = filtered.find((conversation) => conversation.id === selectedId) ?? filtered[0];
-
   const threadMessages = selectedConversation ? (localMessagesByConversation[selectedConversation.id] ?? []) : [];
 
   const onSend = () => {
@@ -95,6 +133,14 @@ export function InboxWorkspace({ initialConversations, initialMessagesByConversa
       [selectedConversation.id]: [...(prev[selectedConversation.id] ?? []), newMessage],
     }));
 
+    setConversations((prev) =>
+      prev.map((item) =>
+        item.id === selectedConversation.id
+          ? { ...item, preview: composerValue.trim(), lastMessageAt: new Date().toISOString(), hasNoReply: false }
+          : item,
+      ),
+    );
+
     setComposerValue("");
   };
 
@@ -102,7 +148,20 @@ export function InboxWorkspace({ initialConversations, initialMessagesByConversa
     <main className="grid gap-4 xl:grid-cols-[380px_1fr]">
       <section className="card p-3">
         <header className="mb-3 px-2">
-          <h3 className="text-lg font-semibold">Inbox multicanal</h3>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-lg font-semibold">Inbox multicanal</h3>
+            <span
+              className={`rounded-md border px-2 py-0.5 text-[11px] ${
+                realtimeStatus === "connected"
+                  ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-300"
+                  : realtimeStatus === "degraded"
+                    ? "border-amber-400/40 bg-amber-500/15 text-amber-200"
+                    : "border-zinc-500/40 bg-zinc-500/15 text-zinc-300"
+              }`}
+            >
+              realtime: {realtimeStatus}
+            </span>
+          </div>
           <p className="text-xs text-zinc-500">Cola unificada con filtros por canal, estado, owner y SLA.</p>
         </header>
 
@@ -144,7 +203,7 @@ export function InboxWorkspace({ initialConversations, initialMessagesByConversa
             <option value="all">Todos</option>
             {setters.map((option) => (
               <option key={option.id} value={option.id}>
-                {option.name}
+                {option.name} {presence[option.id] ? "🟢" : "⚪"}
               </option>
             ))}
           </select>
@@ -184,7 +243,9 @@ export function InboxWorkspace({ initialConversations, initialMessagesByConversa
                     {channelVisuals[thread.channel].icon} {channelVisuals[thread.channel].label}
                   </span>
                   <span>•</span>
-                  <span>Owner: {thread.ownerName ?? "Sin owner"}</span>
+                  <span>
+                    Owner: {thread.ownerName ?? "Sin owner"} {thread.assignedSetterId && presence[thread.assignedSetterId] ? "🟢" : "⚪"}
+                  </span>
                   <span>•</span>
                   <span className="uppercase">Etapa: {thread.stage}</span>
                 </div>

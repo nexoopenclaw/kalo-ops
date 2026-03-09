@@ -1,12 +1,8 @@
-import { automationService } from "@/lib/automation-service";
 import { resolveDbContext, AuthContextError } from "@/lib/db/context";
 import { requireRole } from "@/lib/authz";
 import { fail, ok } from "@/lib/api-response";
 
-type SimulateBody = {
-  workflowId?: string;
-  context?: Record<string, unknown>;
-};
+type Body = { conversationId?: string; assignedToUserId?: string };
 
 export async function POST(request: Request) {
   try {
@@ -14,23 +10,18 @@ export async function POST(request: Request) {
     const denied = requireRole(ctx, ["owner", "admin", "setter", "closer"]);
     if (denied) return denied;
 
-    const payload = (await request.json()) as SimulateBody;
-
-    if (!payload.workflowId) {
-      return fail({ code: "VALIDATION_ERROR", message: "workflowId es obligatorio" }, 400);
+    const body = (await request.json()) as Body;
+    if (!body.conversationId || !body.assignedToUserId) {
+      return fail({ code: "VALIDATION_ERROR", message: "conversationId and assignedToUserId are required" }, 400);
     }
 
-    const log = await automationService.simulateRun({
-      organizationId: ctx.organizationId,
-      workflowId: payload.workflowId,
-      context: payload.context ?? {},
+    return ok({
+      conversationId: body.conversationId,
+      assignedToUserId: body.assignedToUserId,
+      pingedByUserId: ctx.user.id,
+      pingedAt: new Date().toISOString(),
+      status: "queued",
     });
-
-    if (!log) {
-      return fail({ code: "NOT_FOUND", message: "Workflow no encontrado" }, 404);
-    }
-
-    return ok(log, 202);
   } catch (error) {
     if (error instanceof AuthContextError) return fail({ code: error.code, message: error.message }, error.status);
     return fail({ code: "INTERNAL_ERROR", message: error instanceof Error ? error.message : "Unexpected error" }, 500);

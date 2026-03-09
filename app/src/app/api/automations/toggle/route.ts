@@ -1,22 +1,26 @@
-import { NextResponse } from "next/server";
 import { resolveDbContext, AuthContextError } from "@/lib/db/context";
 import { toggleAutomation } from "@/lib/db/repositories/automations-repository";
+import { fail, ok } from "@/lib/api-response";
+import { requireRole } from "@/lib/authz";
 
 type Body = { workflowId?: string; active?: boolean };
 
 export async function POST(request: Request) {
   try {
     const ctx = await resolveDbContext(request);
+    const denied = requireRole(ctx, ["owner", "admin"]);
+    if (denied) return denied;
+
     const body = (await request.json()) as Body;
     if (!body.workflowId || typeof body.active !== "boolean") {
-      return NextResponse.json({ ok: false, error: "workflowId and active are required" }, { status: 400 });
+      return fail({ code: "VALIDATION_ERROR", message: "workflowId and active are required" }, 400);
     }
 
     const data = await toggleAutomation(ctx, { workflowId: body.workflowId, active: body.active });
-    if (!data) return NextResponse.json({ ok: false, error: "Workflow not found" }, { status: 404 });
-    return NextResponse.json({ ok: true, data });
+    if (!data) return fail({ code: "NOT_FOUND", message: "Workflow not found" }, 404);
+    return ok(data);
   } catch (error) {
-    if (error instanceof AuthContextError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Unexpected error" }, { status: 500 });
+    if (error instanceof AuthContextError) return fail({ code: error.code, message: error.message }, error.status);
+    return fail({ code: "INTERNAL_ERROR", message: error instanceof Error ? error.message : "Unexpected error" }, 500);
   }
 }

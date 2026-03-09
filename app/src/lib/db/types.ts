@@ -1,4 +1,4 @@
-export type MembershipRole = "owner" | "admin" | "setter" | "closer";
+export type MembershipRole = "owner" | "admin" | "setter" | "closer" | "viewer";
 export type DealStage = "new" | "qualified" | "booked" | "show" | "won" | "lost";
 
 export interface DbAuthUser {

@@ -1,19 +1,18 @@
-import { NextResponse } from "next/server";
 import { automationQueue } from "@/lib/automation-queue";
+import { resolveDbContext, AuthContextError } from "@/lib/db/context";
+import { requireRole } from "@/lib/authz";
+import { fail, ok } from "@/lib/api-response";
 
 export async function POST(request: Request) {
-  let payload: { organizationId?: string };
-
   try {
-    payload = (await request.json()) as { organizationId?: string };
-  } catch {
-    return NextResponse.json({ ok: false, error: "Body JSON inválido" }, { status: 400 });
-  }
+    const ctx = await resolveDbContext(request);
+    const denied = requireRole(ctx, ["owner", "admin"]);
+    if (denied) return denied;
 
-  if (!payload.organizationId) {
-    return NextResponse.json({ ok: false, error: "organizationId es obligatorio" }, { status: 400 });
+    const data = await automationQueue.runNext(ctx.organizationId);
+    return ok(data, 202);
+  } catch (error) {
+    if (error instanceof AuthContextError) return fail({ code: error.code, message: error.message }, error.status);
+    return fail({ code: "INTERNAL_ERROR", message: error instanceof Error ? error.message : "Unexpected error" }, 500);
   }
-
-  const data = await automationQueue.runNext(payload.organizationId);
-  return NextResponse.json({ ok: true, data }, { status: 202 });
 }
