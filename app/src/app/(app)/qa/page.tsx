@@ -1,20 +1,19 @@
 import Link from "next/link";
 
 const checks = [
-  { module: "Adapter runtime abstraction", status: "PASS", detail: "Contrato unificado mock/live para Meta, WhatsApp, Email, Stripe y Calendly con matriz de capacidades." },
-  { module: "Webhook replay tooling", status: "PASS", detail: "Endpoints /api/webhooks/replay y /api/webhooks/replay/batch con dry-run determinista." },
-  { module: "Backoff strategy visibility", status: "PASS", detail: "Configuración exponencial+jitter visible en /ops y usada por replay." },
-  { module: "Attribution explainability", status: "PASS", detail: "Matcher DM→content determinista + endpoint /api/attribution/explain/[leadId]." },
-  { module: "Integraciones + Ops UI", status: "PASS", detail: "Modo mock/live, salud de adapters y último error visibles en UI premium dark." },
-  { module: "Theme consistency", status: "PASS", detail: "Copy en español y acento #d4e83a en componentes nuevos." },
+  { module: "Delivery orchestrator", status: "PASS", detail: "Pipeline provider-agnostic con email/whatsapp/slack + historial de intentos y retry." },
+  { module: "Automation execution audit", status: "PASS", detail: "Trail robusto con inputs/decisions/outputs/duración/correlation id y endpoint /api/automations/audit." },
+  { module: "Attribution fallback mappings", status: "PASS", detail: "Heurística determinista reforzada + tabla de mappings fallback vía /api/attribution/mappings." },
+  { module: "Feature flags go-live", status: "PASS", detail: "Registro env + override para webhooks live, outbound live y automations live execute; visible en /ops." },
+  { module: "Theme consistency", status: "PASS", detail: "Copy en español y acento #d4e83a en secciones nuevas." },
 ];
 
 export default function QAPage() {
   return (
     <main className="space-y-4">
       <section className="card p-4">
-        <h1 className="text-2xl font-semibold">QA interno · Sprint 21</h1>
-        <p className="text-sm text-zinc-400">Checklist de adapter runtime, replay y attribution explainability.</p>
+        <h1 className="text-2xl font-semibold">QA interno · Sprint 22</h1>
+        <p className="text-sm text-zinc-400">Checklist de delivery orchestration, audit trail, attribution fallback y safety flags.</p>
       </section>
 
       <section className="card p-4">
@@ -25,15 +24,13 @@ export default function QAPage() {
       <section className="card p-4 text-sm">
         <h2 className="text-lg font-semibold">Pruebas manuales rápidas</h2>
         <ol className="mt-3 list-decimal space-y-2 pl-5 text-zinc-300">
-          <li>
-            Probar <code>POST /api/webhooks/replay</code> con <code>{`{"eventId":"<id>","dryRun":true}`}</code> y validar hash determinista.
-          </li>
-          <li>Probar <code>POST /api/webhooks/replay/batch</code> con 2-3 items y verificar resumen success/failed.</li>
-          <li>Abrir <Link href="/ops" className="text-[#d4e83a] underline">/ops</Link> y validar bloque de backoff + adapters + replay dry-run.</li>
-          <li>Abrir <Link href="/integraciones" className="text-[#d4e83a] underline">/integraciones</Link> y validar modo mock/live, health y último error.</li>
-          <li>Probar <code>GET /api/attribution/explain/lead_1</code> y revisar score + reasons.</li>
-          <li>Enviar mensaje desde Inbox/API y confirmar que sale vía adapter runtime (provider + mode en respuesta).</li>
-          <li>Revisar docs <code>docs/SPRINT_21_ADAPTER_RUNTIME.md</code>.</li>
+          <li>Probar <code>POST /api/delivery/send-test</code> con canales email/whatsapp/slack y validar status/mode/correlationId.</li>
+          <li>Probar <code>GET /api/delivery/history?organizationId=org_1</code> y confirmar intentos recientes.</li>
+          <li>Ejecutar trigger en <Link href="/automations" className="text-[#d4e83a] underline">/automations</Link> y verificar sección "Audit trail" + <code>/api/automations/audit</code>.</li>
+          <li>Probar <code>GET/POST /api/attribution/mappings</code> y luego <code>/api/attribution/explain/lead_1</code>.</li>
+          <li>Abrir <Link href="/ops" className="text-[#d4e83a] underline">/ops</Link> y validar flags live/mock + source.</li>
+          <li>Con flags OFF, validar respuesta mock segura en <code>/api/webhooks/process</code> y <code>/api/channels/send</code>.</li>
+          <li>Revisar docs <code>docs/SPRINT_22_DELIVERY_ATTRIBUTION_FLAGS.md</code>.</li>
         </ol>
       </section>
     </main>

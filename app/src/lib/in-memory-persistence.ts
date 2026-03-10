@@ -88,6 +88,17 @@ export interface ContentAttributionStore {
   createdAt: string;
 }
 
+export interface AttributionFallbackMappingStore {
+  id: string;
+  organizationId: string;
+  matchPattern: string;
+  contentPieceId: string;
+  priority: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ReportSnapshotStore {
   id: string;
   organizationId: string;
@@ -217,6 +228,7 @@ export interface InMemoryPersistenceState {
   experimentOutcomes: ExperimentOutcomeStore[];
   contentPieces: ContentPieceStore[];
   contentAttributions: ContentAttributionStore[];
+  attributionFallbackMappings: AttributionFallbackMappingStore[];
   reportSnapshots: ReportSnapshotStore[];
   alertConfigs: AlertConfigStore[];
   webhookEvents: WebhookEventStore[];
@@ -237,6 +249,7 @@ const state: InMemoryPersistenceState = {
   experimentOutcomes: [],
   contentPieces: [],
   contentAttributions: [],
+  attributionFallbackMappings: [],
   reportSnapshots: [],
   alertConfigs: [],
   webhookEvents: [],

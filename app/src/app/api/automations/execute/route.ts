@@ -5,6 +5,7 @@ import { fail, ok } from "@/lib/api-response";
 import { requireRole } from "@/lib/authz";
 import { checkRateLimit, getClientKey } from "@/lib/rate-limit";
 import { getRequestId, logger } from "@/lib/logger";
+import { featureFlags } from "@/lib/feature-flags";
 
 export async function POST(request: Request) {
   const requestId = getRequestId(request);
@@ -27,7 +28,10 @@ export async function POST(request: Request) {
       triggerType: payload.triggerType,
       triggerValue: payload.triggerValue,
       workflowId: payload.workflowId,
-      context: payload.context ?? {},
+      context: {
+        ...(payload.context ?? {}),
+        executionMode: featureFlags.isEnabled("automations_live_execute") ? "live" : "mock",
+      },
     });
 
     for (const entry of executions) {

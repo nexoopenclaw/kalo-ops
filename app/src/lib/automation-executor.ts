@@ -1,6 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { automationService, type AutomationAction, type AutomationCondition, type AutomationTriggerType, type AutomationWorkflow } from "@/lib/automation-service";
 import { inboxService, type ConversationStatus } from "@/lib/inbox-service";
 import { crmService } from "@/lib/crm-service";
+import { automationAuditService } from "@/lib/automation-audit-service";
 
 export type AutomationExecutionStatus = "success" | "failed" | "skipped";
 
@@ -153,6 +155,7 @@ export const automationExecutor = {
     const entries: AutomationExecutionEntry[] = [];
     for (const workflow of workflows) {
       const started = Date.now();
+      const correlationId = randomUUID();
       const context = {
         ...(payload.context ?? {}),
         conversation: {
@@ -199,6 +202,19 @@ export const automationExecutor = {
 
       executionLog.unshift(entry);
       entries.push(entry);
+
+      automationAuditService.record({
+        organizationId: payload.organizationId,
+        workflowId: workflow.id,
+        workflowName: workflow.name,
+        correlationId,
+        triggerType: payload.triggerType,
+        inputs: payload.context ?? {},
+        decisions: { conditionsOk, reason, triggerValue: payload.triggerValue ?? null },
+        outputs: { actionResults, status },
+        status,
+        durationMs: entry.durationMs,
+      });
 
       await automationService.simulateRun({
         organizationId: payload.organizationId,

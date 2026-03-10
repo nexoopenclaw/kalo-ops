@@ -31,11 +31,13 @@ type ExecutionItem = {
 };
 
 type QueueStatus = { total: number; pending: number; running: number; failed: number; completed: number };
+type AuditItem = { id: string; workflowName: string; correlationId: string; status: "success" | "failed" | "skipped"; durationMs: number; createdAt: string };
 
 export function AutomationWorkspace({ initialWorkflows }: Props) {
   const [workflows, setWorkflows] = useState(initialWorkflows);
   const [executions, setExecutions] = useState<ExecutionItem[]>([]);
   const [queue, setQueue] = useState<QueueStatus>({ total: 0, pending: 0, running: 0, failed: 0, completed: 0 });
+  const [audit, setAudit] = useState<AuditItem[]>([]);
   const [triggerType, setTriggerType] = useState<AutomationTriggerType>("silence");
   const [triggerValue, setTriggerValue] = useState("");
   const [contextText, setContextText] = useState('{"conversationId":"conv_2","leadId":"lead_2","leadScore":72}');
@@ -43,14 +45,17 @@ export function AutomationWorkspace({ initialWorkflows }: Props) {
   const activeCount = useMemo(() => workflows.filter((workflow) => workflow.active).length, [workflows]);
 
   const refreshExecutionCenter = async () => {
-    const [qRes, eRes] = await Promise.all([
+    const [qRes, eRes, aRes] = await Promise.all([
       fetch("/api/automations/queue/status?organizationId=org_1", { cache: "no-store" }),
       fetch("/api/automations/executions?organizationId=org_1&limit=8", { cache: "no-store" }),
+      fetch("/api/automations/audit?organizationId=org_1&limit=8", { cache: "no-store" }),
     ]);
     const qJson = (await qRes.json()) as { data: QueueStatus };
     const eJson = (await eRes.json()) as { data: ExecutionItem[] };
-    setQueue(qJson.data);
-    setExecutions(eJson.data);
+    const aJson = (await aRes.json()) as { data: AuditItem[] };
+    setQueue(qJson.data ?? { total: 0, pending: 0, running: 0, failed: 0, completed: 0 });
+    setExecutions(eJson.data ?? []);
+    setAudit(aJson.data ?? []);
   };
 
   useEffect(() => {
@@ -179,6 +184,18 @@ export function AutomationWorkspace({ initialWorkflows }: Props) {
               ))}
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <section className="card p-4">
+        <h2 className="text-lg font-semibold">Audit trail (últimas ejecuciones)</h2>
+        <div className="mt-3 space-y-2 text-xs">
+          {audit.map((item) => (
+            <div key={item.id} className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-zinc-300">
+              <p>{item.workflowName} · <span className="text-[#d4e83a]">{item.status}</span> · {item.durationMs}ms</p>
+              <p className="text-zinc-500">corr: {item.correlationId.slice(0, 8)} · {new Date(item.createdAt).toLocaleString("es-ES")}</p>
+            </div>
+          ))}
         </div>
       </section>
     </main>

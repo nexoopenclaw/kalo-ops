@@ -1,5 +1,6 @@
 import { fail, ok } from "@/lib/api-response";
 import { channelDispatcher, type OutboundMessageType, type SupportedChannel } from "@/lib/channel-adapters";
+import { featureFlags } from "@/lib/feature-flags";
 
 interface SendBody {
   organizationId?: string;
@@ -34,6 +35,10 @@ export async function POST(request: Request) {
 
   if (!conversationId || !leadId || !to || !body) {
     return fail({ code: "VALIDATION_ERROR", message: "conversationId, leadId, to y body son obligatorios" }, 400);
+  }
+
+  if (!featureFlags.isEnabled("outbound_sends_live")) {
+    return ok({ organizationId, mode: "mock", status: "queued", reason: "Feature flag outbound_sends_live disabled" }, 202);
   }
 
   const result = await channelDispatcher.send({

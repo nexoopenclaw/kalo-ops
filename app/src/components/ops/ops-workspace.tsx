@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { AdapterHealth, SupportedChannel } from "@/lib/channel-adapters";
 import type { ProviderAdapterStatus } from "@/lib/provider-runtime";
 import type { ReplayBackoffConfig } from "@/lib/webhook-replay-service";
+import type { FeatureFlagState } from "@/lib/feature-flags";
 
 type ChannelMetric = {
   channel: SupportedChannel;
@@ -26,11 +27,12 @@ type OpsWorkspaceProps = {
   };
   providerAdapters: ProviderAdapterStatus[];
   backoffConfig: ReplayBackoffConfig;
+  featureFlags: FeatureFlagState[];
 };
 
 const channelLabel: Record<SupportedChannel, string> = { instagram: "Instagram", whatsapp: "WhatsApp", email: "Email" };
 
-export function OpsWorkspace({ initialHealth, initialMetrics, diagnostics, integrity, providerAdapters, backoffConfig }: OpsWorkspaceProps) {
+export function OpsWorkspace({ initialHealth, initialMetrics, diagnostics, integrity, providerAdapters, backoffConfig, featureFlags }: OpsWorkspaceProps) {
   const [health, setHealth] = useState(initialHealth);
   const [metrics] = useState(initialMetrics);
   const [busy, setBusy] = useState<string | null>(null);
@@ -77,6 +79,17 @@ export function OpsWorkspace({ initialHealth, initialMetrics, diagnostics, integ
         <div className="mt-2 space-y-1 text-xs">
           {providerAdapters.map((a) => (
             <p key={a.id} className="rounded-md border border-white/10 bg-white/[0.02] px-2 py-1">{a.label} · mode {a.mode} · health {a.health} · lastError {a.lastError ?? "ninguno"}</p>
+          ))}
+        </div>
+      </section>
+
+      <section className="card p-4 text-sm">
+        <h2 className="text-lg font-semibold">Feature flags go-live</h2>
+        <div className="mt-2 space-y-1 text-xs">
+          {featureFlags.map((flag) => (
+            <p key={flag.key} className="rounded-md border border-white/10 bg-white/[0.02] px-2 py-1">
+              {flag.label} · mode <span className={flag.mode === "live" ? "text-emerald-300" : "text-orange-200"}>{flag.mode}</span> · source {flag.source}
+            </p>
           ))}
         </div>
       </section>

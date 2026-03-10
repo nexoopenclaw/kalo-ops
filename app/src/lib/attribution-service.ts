@@ -1,4 +1,11 @@
-import { getPersistenceState, type AlertConfigStore, type ContentAttributionStore, type ContentPieceStore, type ReportSnapshotStore } from "@/lib/in-memory-persistence";
+import {
+  getPersistenceState,
+  type AlertConfigStore,
+  type AttributionFallbackMappingStore,
+  type ContentAttributionStore,
+  type ContentPieceStore,
+  type ReportSnapshotStore,
+} from "@/lib/in-memory-persistence";
 
 export type ContentPlatform = "instagram" | "youtube" | "tiktok" | "linkedin" | "x";
 export type ContentType = "reel" | "post" | "story" | "video" | "thread" | "newsletter";
@@ -58,6 +65,17 @@ export interface AttributionExplainResult {
   matchedContentPieceId: string | null;
   score: number;
   reasons: Array<{ rule: string; weight: number; matched: boolean; detail: string }>;
+}
+
+export interface AttributionFallbackMapping {
+  id: string;
+  organizationId: string;
+  matchPattern: string;
+  contentPieceId: string;
+  priority: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AlertRule {
@@ -129,6 +147,19 @@ const seedLeadDmSignals: Record<string, string> = {
   lead_5: "vengo del thread de mensajes para leads frios",
 };
 
+const seedFallbackMappings: AttributionFallbackMappingStore[] = [
+  {
+    id: "map_1",
+    organizationId: "org_1",
+    matchPattern: "show up rate",
+    contentPieceId: "cp_2",
+    priority: 100,
+    active: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
+
 const seedSnapshots: ReportSnapshotStore[] = [
   {
     id: "report_daily_1",
@@ -163,6 +194,8 @@ interface AttributionRepository {
   upsertAlert(rule: Omit<AlertRule, "createdAt" | "updatedAt">): Promise<AlertRule>;
   getDailySnapshot(organizationId: string): Promise<ReportSnapshotStore | null>;
   getWeeklySnapshot(organizationId: string): Promise<ReportSnapshotStore | null>;
+  listFallbackMappings(organizationId: string): Promise<AttributionFallbackMapping[]>;
+  upsertFallbackMapping(mapping: Omit<AttributionFallbackMapping, "createdAt" | "updatedAt">): Promise<AttributionFallbackMapping>;
 }
 
 class InMemoryAttributionRepository implements AttributionRepository {
@@ -173,6 +206,7 @@ class InMemoryAttributionRepository implements AttributionRepository {
     if (this.state.contentAttributions.length === 0) this.state.contentAttributions.push(...seedAttributions);
     if (this.state.alertConfigs.length === 0) this.state.alertConfigs.push(...seedAlerts);
     if (this.state.reportSnapshots.length === 0) this.state.reportSnapshots.push(...seedSnapshots);
+    if (this.state.attributionFallbackMappings.length === 0) this.state.attributionFallbackMappings.push(...seedFallbackMappings);
   }
 
   async listContent(organizationId: string): Promise<ContentPiece[]> {
@@ -229,6 +263,30 @@ class InMemoryAttributionRepository implements AttributionRepository {
 
   async getWeeklySnapshot(organizationId: string): Promise<ReportSnapshotStore | null> {
     return this.state.reportSnapshots.find((item) => item.organizationId === organizationId && item.reportType === "weekly_review") ?? null;
+  }
+
+  async listFallbackMappings(organizationId: string): Promise<AttributionFallbackMapping[]> {
+    return this.state.attributionFallbackMappings
+      .filter((item) => item.organizationId === organizationId)
+      .sort((a, b) => b.priority - a.priority)
+      .map((item) => ({ ...item }));
+  }
+
+  async upsertFallbackMapping(mapping: Omit<AttributionFallbackMapping, "createdAt" | "updatedAt">): Promise<AttributionFallbackMapping> {
+    const existing = this.state.attributionFallbackMappings.find((item) => item.organizationId === mapping.organizationId && item.id === mapping.id);
+    const now = new Date().toISOString();
+    if (existing) {
+      existing.matchPattern = mapping.matchPattern;
+      existing.contentPieceId = mapping.contentPieceId;
+      existing.priority = mapping.priority;
+      existing.active = mapping.active;
+      existing.updatedAt = now;
+      return { ...existing };
+    }
+
+    const created: AttributionFallbackMappingStore = { ...mapping, createdAt: now, updatedAt: now };
+    this.state.attributionFallbackMappings.push(created);
+    return { ...created };
   }
 }
 
@@ -386,6 +444,44 @@ export const attributionService = {
     });
 
     const best = scored.sort((a, b) => b.score - a.score || a.pieceId.localeCompare(b.pieceId))[0];
+    if ((best?.score ?? 0) >= 40) {
+      return { leadId, matchedContentPieceId: best?.pieceId ?? null, score: best?.score ?? 0, reasons: best?.reasons ?? [] };
+    }
+
+    const mappings = await repository.listFallbackMappings(organizationId);
+    const normalizedSignal = normalizeText(dmSignal).join(" ");
+    const fallback = mappings
+      .filter((item) => item.active)
+      .sort((a, b) => b.priority - a.priority)
+      .find((item) => normalizedSignal.includes(normalizeText(item.matchPattern).join(" ")));
+
+    if (fallback) {
+      return {
+        leadId,
+        matchedContentPieceId: fallback.contentPieceId,
+        score: 35,
+        reasons: [
+          { rule: "fallback_mapping", weight: 35, matched: true, detail: `pattern '${fallback.matchPattern}'` },
+          ...(best?.reasons ?? []),
+        ],
+      };
+    }
+
     return { leadId, matchedContentPieceId: best?.pieceId ?? null, score: best?.score ?? 0, reasons: best?.reasons ?? [] };
+  },
+
+  async listFallbackMappings(organizationId = "org_1") {
+    return repository.listFallbackMappings(organizationId);
+  },
+
+  async upsertFallbackMapping(input: { organizationId: string; id?: string; matchPattern: string; contentPieceId: string; priority?: number; active?: boolean }) {
+    return repository.upsertFallbackMapping({
+      id: input.id ?? `map_${Date.now()}`,
+      organizationId: input.organizationId,
+      matchPattern: input.matchPattern,
+      contentPieceId: input.contentPieceId,
+      priority: Number(input.priority ?? 50),
+      active: input.active ?? true,
+    });
   },
 };

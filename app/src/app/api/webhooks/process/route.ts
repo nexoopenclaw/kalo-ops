@@ -3,6 +3,7 @@ import { resolveDbContext, AuthContextError } from "@/lib/db/context";
 import type { SupportedChannel } from "@/lib/channel-adapters";
 import { channelDispatcher } from "@/lib/channel-adapters";
 import { insertWebhookEvent } from "@/lib/db/repositories/webhooks-repository";
+import { featureFlags } from "@/lib/feature-flags";
 
 const SUPPORTED_CHANNELS: SupportedChannel[] = ["instagram", "whatsapp", "email"];
 
@@ -16,6 +17,9 @@ export async function POST(request: Request) {
     }
 
     if (!body.payload) return NextResponse.json({ ok: false, error: "payload es obligatorio" }, { status: 400 });
+    if (!featureFlags.isEnabled("webhooks_live_processing")) {
+      return NextResponse.json({ ok: true, data: { mode: "mock", skipped: true, reason: "Feature flag webhooks_live_processing disabled" } }, { status: 202 });
+    }
 
     const normalized = channelDispatcher.normalizeInbound(body.channel, body.payload);
     const msg = String(normalized.body ?? "").toLowerCase();

@@ -4,6 +4,7 @@ import { integrityCheckService } from "@/lib/integrity-check-service";
 import { opsDiagnosticsService } from "@/lib/ops-diagnostics-service";
 import { getReplayBackoffConfig } from "@/lib/webhook-replay-service";
 import { listProviderAdapterStatus } from "@/lib/provider-runtime";
+import { featureFlags } from "@/lib/feature-flags";
 
 export default async function OpsPage() {
   const health = await channelDispatcher.health();
@@ -24,6 +25,7 @@ export default async function OpsPage() {
       integrity={integrity}
       providerAdapters={listProviderAdapterStatus()}
       backoffConfig={getReplayBackoffConfig()}
+      featureFlags={featureFlags.list()}
     />
   );
 }
