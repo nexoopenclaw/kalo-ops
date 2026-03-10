@@ -1,3 +1,5 @@
+import { dispatchOutboundViaAdapter } from "@/lib/provider-runtime";
+
 export type Channel = "instagram" | "whatsapp" | "email" | "webchat" | "other";
 
 export type ConversationStatus = "new" | "active" | "waiting_setter" | "waiting_lead" | "won" | "lost";
@@ -55,7 +57,8 @@ export interface SendMessageInput {
 export interface SendMessageResult {
   message: InboxMessage;
   delivery: {
-    provider: "mock" | "meta";
+    provider: string;
+    mode: "mock" | "live";
     status: "queued" | "sent" | "failed";
     externalMessageId?: string;
   };
@@ -233,14 +236,24 @@ export const inboxService = {
       senderLabel: "Setter",
     };
 
-    // TODO(Meta/Email SDK): dispatch message to WhatsApp/Instagram/Email provider endpoint using credentials.
-    // TODO(Supabase): persist sent message in `public.messages` and update conversation unread/sla timestamps in a transaction.
+    const adapterId = input.channel === "instagram" ? "meta" : input.channel === "whatsapp" ? "whatsapp" : "email";
+    const dispatch = await dispatchOutboundViaAdapter({
+      adapterId,
+      channel: input.channel as "instagram" | "whatsapp" | "email",
+      organizationId: input.organizationId,
+      conversationId: input.conversationId,
+      leadId: `lead_${input.conversationId}`,
+      to: `${input.channel}:${input.conversationId}`,
+      body: input.body,
+    });
 
     return {
       message,
       delivery: {
-        provider: "mock",
-        status: "queued",
+        provider: dispatch.adapter,
+        mode: dispatch.mode,
+        status: dispatch.status,
+        externalMessageId: dispatch.externalMessageId,
       },
     };
   },

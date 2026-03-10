@@ -53,6 +53,13 @@ export interface LinkLeadToContentInput {
   attributedRevenue?: number;
 }
 
+export interface AttributionExplainResult {
+  leadId: string;
+  matchedContentPieceId: string | null;
+  score: number;
+  reasons: Array<{ rule: string; weight: number; matched: boolean; detail: string }>;
+}
+
 export interface AlertRule {
   id: string;
   organizationId: string;
@@ -113,6 +120,14 @@ const seedAlerts: AlertConfigStore[] = [
   { id: "alert_3", organizationId: "org_1", ruleType: "inbound_spike", enabled: false, threshold: 35, window: "24h", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { id: "alert_4", organizationId: "org_1", ruleType: "backlog", enabled: true, threshold: 30, window: "24h", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
 ];
+
+const seedLeadDmSignals: Record<string, string> = {
+  lead_1: "vi el reel de 5 clientes premium y quiero mas info",
+  lead_2: "el video de show up rate me hizo escribirte",
+  lead_3: "llegue por instagram por el caso de cierre premium",
+  lead_4: "me ayudo el playbook de dm a call booked",
+  lead_5: "vengo del thread de mensajes para leads frios",
+};
 
 const seedSnapshots: ReportSnapshotStore[] = [
   {
@@ -223,6 +238,32 @@ function round(n: number) {
   return Number(n.toFixed(2));
 }
 
+function normalizeText(input: string): string[] {
+  return input
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function deterministicMatchScore(dmSignal: string, piece: ContentPiece): AttributionExplainResult["reasons"] {
+  const dmTokens = new Set(normalizeText(dmSignal));
+  const hookTokens = normalizeText(piece.hook);
+  const angleTokens = normalizeText(piece.angle);
+  const overlap = hookTokens.filter((t) => dmTokens.has(t));
+  const hookHit = overlap.length > 0;
+  const angleHit = angleTokens.some((t) => dmTokens.has(t));
+  const platformHint = (piece.platform === "instagram" && dmTokens.has("instagram")) || (piece.platform === "x" && dmTokens.has("thread"));
+
+  return [
+    { rule: "hook_keyword_overlap", weight: Math.min(70, overlap.length * 20), matched: hookHit, detail: hookHit ? `keywords: ${overlap.join(", ")}` : "sin overlap" },
+    { rule: "angle_keyword_match", weight: angleHit ? 20 : 0, matched: angleHit, detail: angleHit ? "angle mencionado en DM" : "angle no detectado" },
+    { rule: "platform_hint", weight: platformHint ? 10 : 0, matched: platformHint, detail: platformHint ? "señal de plataforma consistente" : "sin señal de plataforma" },
+  ];
+}
+
 export const attributionService = {
   async listContentMetrics(organizationId = "org_1"): Promise<ContentPieceMetrics[]> {
     const [pieces, attributions] = await Promise.all([repository.listContent(organizationId), repository.listAttributions(organizationId)]);
@@ -329,5 +370,22 @@ export const attributionService = {
       threshold: input.threshold,
       window: input.window,
     });
+  },
+
+  async explainLeadAttribution(leadId: string, organizationId = "org_1"): Promise<AttributionExplainResult> {
+    const dmSignal = seedLeadDmSignals[leadId] ?? "";
+    const pieces = await repository.listContent(organizationId);
+    if (!dmSignal || pieces.length === 0) {
+      return { leadId, matchedContentPieceId: null, score: 0, reasons: [{ rule: "no_signal", weight: 0, matched: false, detail: "No hay señal DM para este lead" }] };
+    }
+
+    const scored = pieces.map((piece) => {
+      const reasons = deterministicMatchScore(dmSignal, piece);
+      const score = reasons.reduce((sum, r) => sum + r.weight, 0);
+      return { pieceId: piece.id, reasons, score };
+    });
+
+    const best = scored.sort((a, b) => b.score - a.score || a.pieceId.localeCompare(b.pieceId))[0];
+    return { leadId, matchedContentPieceId: best?.pieceId ?? null, score: best?.score ?? 0, reasons: best?.reasons ?? [] };
   },
 };
