@@ -1,25 +1,9 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { fail, ok } from "@/lib/api-response";
-import { revenueBridgeService, type StripePaymentEvent } from "@/lib/revenue-bridge-service";
 import { checkRateLimit, getClientKey } from "@/lib/rate-limit";
 import { getRequestId, logger } from "@/lib/logger";
-
-type StripeWebhookPayload = {
-  id?: string;
-  type?: string;
-  data?: {
-    object?: {
-      id?: string;
-      metadata?: Record<string, string>;
-      customer_email?: string;
-      receipt_email?: string;
-      amount_received?: number;
-      currency?: string;
-      [key: string]: unknown;
-    };
-  };
-  [key: string]: unknown;
-};
+import { revenueBridgeService } from "@/lib/revenue-bridge-service";
+import { validateStripeWebhook } from "@/lib/revenue-bridge-validation";
 
 function verifyStripeSignaturePlaceholder(rawBody: string, signatureHeader: string | null): boolean {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -32,31 +16,6 @@ function verifyStripeSignaturePlaceholder(rawBody: string, signatureHeader: stri
 
   if (expectedBuf.length !== providedBuf.length) return false;
   return timingSafeEqual(expectedBuf, providedBuf);
-}
-
-function parseStripePayment(payload: StripeWebhookPayload): StripePaymentEvent | null {
-  if (payload.type !== "payment_intent.succeeded" && payload.type !== "checkout.session.completed") {
-    return null;
-  }
-
-  const object = payload.data?.object;
-  if (!object) return null;
-
-  const externalId = String(payload.id ?? object.id ?? "").trim();
-  if (!externalId) return null;
-
-  const email = object.customer_email ?? object.receipt_email ?? object.metadata?.email;
-
-  return {
-    id: externalId,
-    customerEmail: email,
-    amount: typeof object.amount_received === "number" ? object.amount_received / 100 : undefined,
-    currency: object.currency?.toUpperCase(),
-    dealId: object.metadata?.deal_id,
-    paymentIntentId: object.id,
-    organizationId: "org_1",
-    raw: payload as Record<string, unknown>,
-  };
 }
 
 export async function POST(request: Request) {
@@ -85,23 +44,30 @@ export async function POST(request: Request) {
     return fail({ code: "INVALID_SIGNATURE", message: "Firma inválida para webhook Stripe" }, 401);
   }
 
-  let payload: StripeWebhookPayload;
+  let payload: unknown;
   try {
-    payload = JSON.parse(rawBody) as StripeWebhookPayload;
+    payload = JSON.parse(rawBody);
   } catch {
     return fail({ code: "INVALID_JSON", message: "Payload JSON inválido" }, 400);
   }
 
-  const paymentEvent = parseStripePayment(payload);
-  if (!paymentEvent) {
-    return ok({ status: "ignored", reason: "Evento Stripe no mapeado a transición revenue bridge" });
+  const parsed = validateStripeWebhook(payload);
+  if (!parsed.ok) {
+    logger.warn("Stripe webhook ignored", { requestId, route: "/api/webhooks/stripe", reason: parsed.reason });
+    return ok({ status: "ignored", reason: parsed.message, deadLetterReason: parsed.reason }, 200, { requestId });
   }
 
-  if (!paymentEvent.customerEmail && !paymentEvent.dealId) {
-    return ok({ status: "ignored", reason: "Evento Stripe sin deal_id ni email para resolver deal" });
+  if (!parsed.data.customerEmail && !parsed.data.dealId) {
+    return ok({ status: "ignored", reason: "Evento Stripe sin deal_id ni email para resolver deal" }, 200, { requestId });
   }
 
-  const result = await revenueBridgeService.processStripePayment(paymentEvent);
-  logger.info("Stripe webhook processed", { requestId, route: "/api/webhooks/stripe", externalId: paymentEvent.id });
-  return ok(result);
+  const result = await revenueBridgeService.processStripePayment(
+    {
+      ...parsed.data,
+      organizationId: "org_1",
+    },
+    requestId,
+  );
+  logger.info("Stripe webhook processed", { requestId, route: "/api/webhooks/stripe", externalId: parsed.data.id });
+  return ok(result, 200, { requestId });
 }

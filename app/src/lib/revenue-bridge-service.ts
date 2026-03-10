@@ -1,7 +1,12 @@
 import { crmService, type Deal, type DealStage } from "@/lib/crm-service";
 import { getPersistenceState } from "@/lib/in-memory-persistence";
+import { logger } from "@/lib/logger";
+import {
+  type BridgeProvider,
+  computeRevenueIdempotencyKey,
+  type DeadLetterReason,
+} from "@/lib/revenue-bridge-validation";
 
-type BridgeProvider = "calendly" | "stripe";
 type BridgeStatus = "processed" | "ignored" | "failed";
 
 export interface CalendlyBookingEvent {
@@ -26,15 +31,6 @@ export interface StripePaymentEvent {
   raw?: Record<string, unknown>;
 }
 
-export interface DealTransitionMappingInput {
-  provider: BridgeProvider;
-  organizationId: string;
-  externalEventId: string;
-  dealId?: string;
-  leadEmail?: string;
-  targetStage: DealStage;
-}
-
 export interface BridgeProcessResult {
   status: BridgeStatus;
   provider: BridgeProvider;
@@ -42,6 +38,7 @@ export interface BridgeProcessResult {
   message: string;
   dealId?: string;
   transitionApplied: boolean;
+  correlationId?: string;
 }
 
 export interface RevenueBridgeSnapshot {
@@ -59,8 +56,17 @@ export interface RevenueBridgeSnapshot {
   ignoredCount: number;
 }
 
+const STAGE_RANK: Record<DealStage, number> = {
+  new: 1,
+  qualified: 2,
+  booked: 3,
+  show: 4,
+  won: 5,
+  lost: 6,
+};
+
 export const revenueBridgeService = {
-  async processCalendlyBooking(event: CalendlyBookingEvent): Promise<BridgeProcessResult> {
+  async processCalendlyBooking(event: CalendlyBookingEvent, correlationId?: string): Promise<BridgeProcessResult> {
     return processEvent({
       provider: "calendly",
       externalEventId: event.id,
@@ -71,10 +77,11 @@ export const revenueBridgeService = {
       targetStage: "booked",
       reason: "Calendly booking confirmada",
       note: `Booking Calendly procesada (${event.id})${event.scheduledAt ? ` · ${event.scheduledAt}` : ""}.`,
+      correlationId,
     });
   },
 
-  async processStripePayment(event: StripePaymentEvent): Promise<BridgeProcessResult> {
+  async processStripePayment(event: StripePaymentEvent, correlationId?: string): Promise<BridgeProcessResult> {
     return processEvent({
       provider: "stripe",
       externalEventId: event.id,
@@ -85,24 +92,7 @@ export const revenueBridgeService = {
       targetStage: "won",
       reason: "Pago Stripe confirmado",
       note: `Pago Stripe registrado (${event.id})${event.amount ? ` · ${event.amount} ${event.currency ?? ""}`.trim() : ""}.`,
-    });
-  },
-
-  async mapToDealTransition(input: DealTransitionMappingInput): Promise<Deal | null> {
-    const deal = await resolveDeal(input.organizationId, input.dealId, input.leadEmail);
-    if (!deal) return null;
-
-    if (deal.stage === input.targetStage) {
-      return deal;
-    }
-
-    return crmService.updateDealStage({
-      organizationId: input.organizationId,
-      dealId: deal.id,
-      nextStage: input.targetStage,
-      changedByUserId: "system_revenue_bridge",
-      reason: `Bridge ${input.provider}`,
-      note: `Transición aplicada por ${input.provider} (${input.externalEventId}).`,
+      correlationId,
     });
   },
 
@@ -127,6 +117,35 @@ export const revenueBridgeService = {
       ignoredCount: db.integrationEventLog.filter((item) => item.status === "ignored").length,
     };
   },
+
+  getDiagnostics(limit = 8) {
+    const db = getPersistenceState();
+    const byProvider = {
+      calendly: db.integrationEventLog.filter((item) => item.provider === "calendly").length,
+      stripe: db.integrationEventLog.filter((item) => item.provider === "stripe").length,
+    };
+
+    const latestFailuresByCategory = [...db.revenueBridgeDeadLetters]
+      .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
+      .slice(0, limit)
+      .map((item) => ({
+        provider: item.provider,
+        externalEventId: item.externalEventId,
+        reason: item.reason,
+        details: item.details,
+        createdAt: item.createdAt,
+        correlationId: item.correlationId,
+      }));
+
+    return {
+      totalEvents: db.integrationEventLog.length,
+      processed: db.integrationEventLog.filter((item) => item.status === "processed").length,
+      ignored: db.integrationEventLog.filter((item) => item.status === "ignored").length,
+      failed: db.integrationEventLog.filter((item) => item.status === "failed").length,
+      byProvider,
+      latestFailuresByCategory,
+    };
+  },
 };
 
 async function processEvent(input: {
@@ -139,33 +158,82 @@ async function processEvent(input: {
   targetStage: DealStage;
   reason: string;
   note: string;
+  correlationId?: string;
 }): Promise<BridgeProcessResult> {
   const db = getPersistenceState();
+  const idempotencyKey = computeRevenueIdempotencyKey({
+    provider: input.provider,
+    organizationId: input.organizationId,
+    externalEventId: input.externalEventId,
+  });
 
-  const alreadyProcessed = db.integrationEventLog.find(
-    (item) => item.provider === input.provider && item.externalEventId === input.externalEventId,
-  );
-
+  const alreadyProcessed = db.integrationEventLog.find((item) => item.idempotencyKey === idempotencyKey);
   if (alreadyProcessed) {
+    const payloadChanged = JSON.stringify(alreadyProcessed.payload) !== JSON.stringify(input.payload);
+    if (payloadChanged) {
+      const message = "Conflicto de idempotencia: mismo evento con payload distinto";
+      pushDeadLetter(input.provider, input.externalEventId, "IDEMPOTENCY_CONFLICT", message, input.correlationId);
+      logEvent(input.provider, input.externalEventId, "failed", input.payload, message, {
+        idempotencyKey,
+        correlationId: input.correlationId,
+        deadLetterReason: "IDEMPOTENCY_CONFLICT",
+      });
+      return {
+        status: "failed",
+        provider: input.provider,
+        externalEventId: input.externalEventId,
+        message,
+        transitionApplied: false,
+        correlationId: input.correlationId,
+      };
+    }
+
     return {
       status: "ignored",
       provider: input.provider,
       externalEventId: input.externalEventId,
       message: "Evento duplicado (idempotente)",
       transitionApplied: false,
+      correlationId: input.correlationId,
     };
   }
 
   const deal = await resolveDeal(input.organizationId, input.dealId, input.leadEmail);
 
   if (!deal) {
-    logEvent(input.provider, input.externalEventId, "ignored", input.payload, "No se encontró deal para el evento");
+    const message = "No se encontró deal para el evento";
+    pushDeadLetter(input.provider, input.externalEventId, "DEAL_NOT_FOUND", message, input.correlationId);
+    logEvent(input.provider, input.externalEventId, "ignored", input.payload, message, {
+      idempotencyKey,
+      correlationId: input.correlationId,
+      deadLetterReason: "DEAL_NOT_FOUND",
+    });
     return {
       status: "ignored",
       provider: input.provider,
       externalEventId: input.externalEventId,
-      message: "No se encontró deal para el evento",
+      message,
       transitionApplied: false,
+      correlationId: input.correlationId,
+    };
+  }
+
+  if (!canTransition(deal.stage, input.targetStage)) {
+    const message = `Regla de transición bloqueada: ${deal.stage} -> ${input.targetStage}`;
+    pushDeadLetter(input.provider, input.externalEventId, "TRANSITION_BLOCKED", message, input.correlationId);
+    logEvent(input.provider, input.externalEventId, "failed", input.payload, message, {
+      idempotencyKey,
+      correlationId: input.correlationId,
+      deadLetterReason: "TRANSITION_BLOCKED",
+    });
+    return {
+      status: "failed",
+      provider: input.provider,
+      externalEventId: input.externalEventId,
+      message,
+      dealId: deal.id,
+      transitionApplied: false,
+      correlationId: input.correlationId,
     };
   }
 
@@ -204,7 +272,18 @@ async function processEvent(input: {
       });
     }
 
-    logEvent(input.provider, input.externalEventId, "processed", input.payload, null);
+    logEvent(input.provider, input.externalEventId, "processed", input.payload, null, {
+      idempotencyKey,
+      correlationId: input.correlationId,
+    });
+
+    logger.info("Revenue bridge event processed", {
+      correlationId: input.correlationId,
+      provider: input.provider,
+      externalEventId: input.externalEventId,
+      dealId: deal.id,
+      targetStage: input.targetStage,
+    });
 
     return {
       status: "processed",
@@ -213,10 +292,16 @@ async function processEvent(input: {
       message: deal.stage === updated.stage ? "Sin cambios de etapa" : `Deal movido a ${updated.stage}`,
       dealId: deal.id,
       transitionApplied: deal.stage !== updated.stage,
+      correlationId: input.correlationId,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Error desconocido";
-    logEvent(input.provider, input.externalEventId, "failed", input.payload, errorMessage);
+    pushDeadLetter(input.provider, input.externalEventId, "CRM_UPDATE_FAILED", errorMessage, input.correlationId);
+    logEvent(input.provider, input.externalEventId, "failed", input.payload, errorMessage, {
+      idempotencyKey,
+      correlationId: input.correlationId,
+      deadLetterReason: "CRM_UPDATE_FAILED",
+    });
 
     return {
       status: "failed",
@@ -225,8 +310,34 @@ async function processEvent(input: {
       message: errorMessage,
       dealId: deal.id,
       transitionApplied: false,
+      correlationId: input.correlationId,
     };
   }
+}
+
+function canTransition(from: DealStage, to: DealStage): boolean {
+  if (from === to) return true;
+  if (from === "won" || from === "lost") return false;
+  return STAGE_RANK[to] >= STAGE_RANK[from];
+}
+
+function pushDeadLetter(
+  provider: BridgeProvider,
+  externalEventId: string,
+  reason: DeadLetterReason,
+  details: string,
+  correlationId?: string,
+) {
+  const db = getPersistenceState();
+  db.revenueBridgeDeadLetters.push({
+    id: `rbdl_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
+    provider,
+    externalEventId,
+    reason,
+    details,
+    createdAt: new Date().toISOString(),
+    correlationId,
+  });
 }
 
 function logEvent(
@@ -235,6 +346,7 @@ function logEvent(
   status: BridgeStatus,
   payload: Record<string, unknown>,
   error: string | null,
+  meta?: { idempotencyKey?: string; correlationId?: string; deadLetterReason?: string },
 ) {
   const db = getPersistenceState();
   db.integrationEventLog.push({
@@ -245,6 +357,9 @@ function logEvent(
     payload,
     processedAt: new Date().toISOString(),
     error,
+    idempotencyKey: meta?.idempotencyKey,
+    correlationId: meta?.correlationId,
+    deadLetterReason: meta?.deadLetterReason ?? null,
   });
 }
 

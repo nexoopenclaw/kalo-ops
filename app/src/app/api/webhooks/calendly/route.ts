@@ -1,19 +1,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { fail, ok } from "@/lib/api-response";
-import { revenueBridgeService, type CalendlyBookingEvent } from "@/lib/revenue-bridge-service";
-
-type CalendlyWebhookPayload = {
-  event?: string;
-  created_at?: string;
-  payload?: {
-    event?: { uri?: string; start_time?: string };
-    invitee?: { uri?: string; email?: string; name?: string };
-    questions_and_answers?: Array<{ question?: string; answer?: string }>;
-    tracking?: Record<string, unknown>;
-    [key: string]: unknown;
-  };
-  [key: string]: unknown;
-};
+import { getRequestId, logger } from "@/lib/logger";
+import { revenueBridgeService } from "@/lib/revenue-bridge-service";
+import { validateCalendlyWebhook } from "@/lib/revenue-bridge-validation";
 
 function verifyCalendlySignature(rawBody: string, signatureHeader: string | null): boolean {
   const signingKey = process.env.CALENDLY_WEBHOOK_SIGNING_KEY;
@@ -28,28 +17,8 @@ function verifyCalendlySignature(rawBody: string, signatureHeader: string | null
   return timingSafeEqual(expectedBuf, providedBuf);
 }
 
-function parseBookingEvent(payload: CalendlyWebhookPayload): CalendlyBookingEvent | null {
-  const eventId = String(payload.payload?.invitee?.uri ?? payload.payload?.event?.uri ?? "").trim();
-  const inviteeEmail = String(payload.payload?.invitee?.email ?? "").trim();
-
-  if (!eventId || !inviteeEmail) return null;
-
-  const dealIdAnswer = payload.payload?.questions_and_answers?.find((item) =>
-    (item.question ?? "").toLowerCase().includes("deal_id"),
-  )?.answer;
-
-  return {
-    id: eventId,
-    inviteeEmail,
-    inviteeName: payload.payload?.invitee?.name,
-    dealId: typeof dealIdAnswer === "string" ? dealIdAnswer : undefined,
-    organizationId: "org_1",
-    scheduledAt: payload.payload?.event?.start_time,
-    raw: payload as Record<string, unknown>,
-  };
-}
-
 export async function POST(request: Request) {
+  const requestId = getRequestId(request);
   const rawBody = await request.text();
   const signature = request.headers.get("calendly-webhook-signature");
   const mockSignature = request.headers.get("x-kalo-mock-signature");
@@ -71,18 +40,27 @@ export async function POST(request: Request) {
     return fail({ code: "INVALID_SIGNATURE", message: "Firma inválida para webhook Calendly" }, 401);
   }
 
-  let payload: CalendlyWebhookPayload;
+  let payload: unknown;
   try {
-    payload = JSON.parse(rawBody) as CalendlyWebhookPayload;
+    payload = JSON.parse(rawBody);
   } catch {
     return fail({ code: "INVALID_JSON", message: "Payload JSON inválido" }, 400);
   }
 
-  const bookingEvent = parseBookingEvent(payload);
-  if (!bookingEvent) {
-    return ok({ status: "ignored", reason: "Evento sin datos mínimos para bridge" });
+  const parsed = validateCalendlyWebhook(payload);
+  if (!parsed.ok) {
+    logger.warn("Calendly webhook ignored", { requestId, route: "/api/webhooks/calendly", reason: parsed.reason });
+    return ok({ status: "ignored", reason: parsed.message, deadLetterReason: parsed.reason });
   }
 
-  const result = await revenueBridgeService.processCalendlyBooking(bookingEvent);
-  return ok(result);
+  const result = await revenueBridgeService.processCalendlyBooking(
+    {
+      ...parsed.data,
+      organizationId: "org_1",
+    },
+    requestId,
+  );
+
+  logger.info("Calendly webhook processed", { requestId, route: "/api/webhooks/calendly", externalId: parsed.data.id });
+  return ok(result, 200, { requestId });
 }

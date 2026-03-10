@@ -184,6 +184,19 @@ export interface IntegrationEventLogStore {
   payload: Record<string, unknown>;
   processedAt: string;
   error: string | null;
+  idempotencyKey?: string;
+  correlationId?: string;
+  deadLetterReason?: string | null;
+}
+
+export interface RevenueBridgeDeadLetterStore {
+  id: string;
+  provider: "calendly" | "stripe";
+  externalEventId: string;
+  reason: string;
+  details: string;
+  correlationId?: string;
+  createdAt: string;
 }
 
 export interface BridgeTransitionStore {
@@ -213,6 +226,7 @@ export interface InMemoryPersistenceState {
   healthActionsLog: HealthActionLogStore[];
   integrationEventLog: IntegrationEventLogStore[];
   bridgeTransitions: BridgeTransitionStore[];
+  revenueBridgeDeadLetters: RevenueBridgeDeadLetterStore[];
 }
 
 const state: InMemoryPersistenceState = {
@@ -232,6 +246,7 @@ const state: InMemoryPersistenceState = {
   healthActionsLog: [],
   integrationEventLog: [],
   bridgeTransitions: [],
+  revenueBridgeDeadLetters: [],
 };
 
 const globalKey = "__kaloOpsInMemoryState__";
