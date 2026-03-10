@@ -1,6 +1,7 @@
 import { fail, ok } from "@/lib/api-response";
 import { channelDispatcher, type OutboundMessageType, type SupportedChannel } from "@/lib/channel-adapters";
 import { featureFlags } from "@/lib/feature-flags";
+import { outboundSafeguards } from "@/lib/outbound-safeguards";
 
 interface SendBody {
   organizationId?: string;
@@ -11,6 +12,7 @@ interface SendBody {
   body?: string;
   messageType?: OutboundMessageType;
   metadata?: Record<string, unknown>;
+  idempotencyKey?: string;
 }
 
 export async function POST(request: Request) {
@@ -37,8 +39,18 @@ export async function POST(request: Request) {
     return fail({ code: "VALIDATION_ERROR", message: "conversationId, leadId, to y body son obligatorios" }, 400);
   }
 
-  if (!featureFlags.isEnabled("outbound_sends_live")) {
-    return ok({ organizationId, mode: "mock", status: "queued", reason: "Feature flag outbound_sends_live disabled" }, 202);
+  const idempotencyKey = String(payload.idempotencyKey ?? "").trim();
+  const requestHash = outboundSafeguards.hashRequest({ channel, conversationId, leadId, to, body, messageType: payload.messageType ?? "text" });
+  if (idempotencyKey) {
+    const cached = outboundSafeguards.findIdempotent(organizationId, idempotencyKey, "channels_send", requestHash);
+    if (cached) return ok({ organizationId, deduplicated: true, dispatch: cached.response }, 200);
+  }
+
+  const forcedDryRun = outboundSafeguards.getGlobalDryRun(organizationId);
+  if (!featureFlags.isEnabled("outbound_sends_live") || forcedDryRun) {
+    const response = { organizationId, mode: "mock", status: "queued", reason: forcedDryRun ? "Global dry-run enabled for organization" : "Feature flag outbound_sends_live disabled" };
+    if (idempotencyKey) outboundSafeguards.storeIdempotent(organizationId, idempotencyKey, "channels_send", requestHash, response as unknown as Record<string, unknown>);
+    return ok(response, 202);
   }
 
   const result = await channelDispatcher.send({
@@ -52,12 +64,12 @@ export async function POST(request: Request) {
     metadata: payload.metadata,
   });
 
-  return ok(
-    {
-      organizationId,
-      dispatch: result,
-      todo: "Configurar credenciales reales del proveedor (SDK/API) en variables seguras de entorno.",
-    },
-    202,
-  );
+  const response = {
+    organizationId,
+    dispatch: result,
+    todo: "Configurar credenciales reales del proveedor (SDK/API) en variables seguras de entorno.",
+  };
+  if (idempotencyKey) outboundSafeguards.storeIdempotent(organizationId, idempotencyKey, "channels_send", requestHash, response as unknown as Record<string, unknown>);
+
+  return ok(response, 202);
 }

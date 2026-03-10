@@ -5,6 +5,8 @@ import { opsDiagnosticsService } from "@/lib/ops-diagnostics-service";
 import { getReplayBackoffConfig } from "@/lib/webhook-replay-service";
 import { listProviderAdapterStatus } from "@/lib/provider-runtime";
 import { featureFlags } from "@/lib/feature-flags";
+import { workerService } from "@/lib/worker-service";
+import { outboundSafeguards } from "@/lib/outbound-safeguards";
 
 export default async function OpsPage() {
   const health = await channelDispatcher.health();
@@ -17,6 +19,8 @@ export default async function OpsPage() {
     { channel: "email" as const, queueDepth: 8, slaBreaches: 1, backlog: 4 },
   ];
 
+  const workerJobs = workerService.listJobs("org_1");
+
   return (
     <OpsWorkspace
       initialHealth={health}
@@ -26,6 +30,8 @@ export default async function OpsPage() {
       providerAdapters={listProviderAdapterStatus()}
       backoffConfig={getReplayBackoffConfig()}
       featureFlags={featureFlags.list()}
+      workerJobs={workerJobs}
+      globalDryRun={outboundSafeguards.getGlobalDryRun("org_1")}
     />
   );
 }

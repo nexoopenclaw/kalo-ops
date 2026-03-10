@@ -1,4 +1,5 @@
 import { attributionService } from "@/lib/attribution-service";
+import { reportingService } from "@/lib/reporting-service";
 
 const exportsMock = ["Exportar PDF", "Exportar CSV"];
 const alertRuleLabels: Record<string, string> = {
@@ -9,10 +10,12 @@ const alertRuleLabels: Record<string, string> = {
 };
 
 export default async function ReportesPage() {
-  const [daily, weekly, alerts] = await Promise.all([
+  const [daily, weekly, alerts, commercial, attributionPerf] = await Promise.all([
     attributionService.getDailyPreview("org_1"),
     attributionService.getWeeklyPreview("org_1"),
     attributionService.listAlertRules("org_1"),
+    reportingService.commercialPerformance("org_1"),
+    reportingService.attributionPerformance("org_1"),
   ]);
 
   return (
@@ -50,6 +53,25 @@ export default async function ReportesPage() {
               </ul>
             </div>
           </div>
+        </article>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <article className="card p-4">
+          <h2 className="text-lg font-semibold">Performance comercial consolidado</h2>
+          <p className="mt-2 text-sm text-zinc-300">Creados {commercial.totals.created} · Booked {commercial.totals.booked} · Won {commercial.totals.won}</p>
+          <p className="text-sm text-zinc-400">Conv booked {commercial.totals.bookingRate}% · close {commercial.totals.closeRate}% · valor ganado €{commercial.totals.wonValue.toLocaleString("es-ES")}</p>
+          <p className="mt-2 text-xs text-zinc-500">Aging (top): {commercial.aging.slice(0, 3).map((a) => `${a.leadName} ${a.daysOpen}d`).join(" · ") || "sin pendientes"}</p>
+        </article>
+        <article className="card p-4">
+          <h2 className="text-lg font-semibold">Attribution performance</h2>
+          <p className="text-sm text-zinc-400">Top contenido por leads/won/value con fallback mapping.</p>
+          <div className="mt-2 space-y-1 text-xs">
+            {attributionPerf.topContent.slice(0, 5).map((item) => (
+              <p key={item.contentPieceId} className="rounded-md border border-white/10 bg-white/[0.02] px-2 py-1">{item.platform} · {item.leads} leads · {item.won} won · €{item.value.toLocaleString("es-ES")}</p>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-zinc-500">Fallback mapping: {attributionPerf.fallback.mappedLeads}/{attributionPerf.fallback.inspectedLeads} leads.</p>
         </article>
       </section>
 

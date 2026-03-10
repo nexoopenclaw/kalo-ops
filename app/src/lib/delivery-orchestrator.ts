@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { dispatchOutboundViaAdapter } from "@/lib/provider-runtime";
 import { featureFlags } from "@/lib/feature-flags";
+import { outboundSafeguards } from "@/lib/outbound-safeguards";
 
 export type DeliveryChannel = "email" | "whatsapp" | "slack";
 export type DeliveryStatus = "queued" | "sent" | "retrying" | "failed";
@@ -20,6 +21,8 @@ export interface DeliveryAttempt {
   correlationId: string;
   externalMessageId: string | null;
   error: string | null;
+  idempotencyKey?: string;
+  deduplicated?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -37,9 +40,35 @@ function providerFor(channel: DeliveryChannel) {
 }
 
 export const deliveryOrchestrator = {
-  async sendTest(input: { organizationId: string; channel: DeliveryChannel; recipient: string; message: string; maxAttempts?: number; forceFail?: boolean }) {
+  async sendTest(input: {
+    organizationId: string;
+    channel: DeliveryChannel;
+    recipient: string;
+    message: string;
+    maxAttempts?: number;
+    forceFail?: boolean;
+    idempotencyKey?: string;
+  }) {
     const now = new Date().toISOString();
     const maxAttempts = Math.max(1, Math.min(5, Number(input.maxAttempts ?? 3)));
+    const requestHash = outboundSafeguards.hashRequest({
+      channel: input.channel,
+      recipient: input.recipient,
+      message: input.message,
+      maxAttempts,
+      forceFail: Boolean(input.forceFail),
+    });
+
+    if (input.idempotencyKey) {
+      const cached = outboundSafeguards.findIdempotent(input.organizationId, input.idempotencyKey, "delivery_send_test", requestHash);
+      if (cached) {
+        const deduped = cached.response as unknown as DeliveryAttempt;
+        return { ...deduped, deduplicated: true };
+      }
+    }
+
+    const mode: "mock" | "live" = featureFlags.isEnabled("outbound_sends_live") && !outboundSafeguards.getGlobalDryRun(input.organizationId) ? "live" : "mock";
+
     const attemptRecord: DeliveryAttempt = {
       id: `datt_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
       organizationId: input.organizationId,
@@ -47,7 +76,7 @@ export const deliveryOrchestrator = {
       recipient: input.recipient,
       message: input.message,
       status: "queued",
-      mode: featureFlags.isEnabled("outbound_sends_live") ? "live" : "mock",
+      mode,
       provider: providerFor(input.channel),
       attempt: 1,
       maxAttempts,
@@ -55,6 +84,7 @@ export const deliveryOrchestrator = {
       correlationId: randomUUID(),
       externalMessageId: null,
       error: null,
+      idempotencyKey: input.idempotencyKey,
       createdAt: now,
       updatedAt: now,
     };
@@ -63,8 +93,8 @@ export const deliveryOrchestrator = {
       if (input.forceFail) throw new Error("Forced failure for retry policy validation");
 
       if (input.channel === "slack") {
-        attemptRecord.status = attemptRecord.mode === "live" ? "sent" : "queued";
-        attemptRecord.externalMessageId = `${attemptRecord.mode}_sl_${Date.now()}`;
+        attemptRecord.status = mode === "live" ? "sent" : "queued";
+        attemptRecord.externalMessageId = `${mode}_sl_${Date.now()}`;
       } else {
         const res = await dispatchOutboundViaAdapter({
           adapterId: input.channel,
@@ -87,6 +117,7 @@ export const deliveryOrchestrator = {
 
     attemptRecord.updatedAt = new Date().toISOString();
     store().unshift(attemptRecord);
+    if (input.idempotencyKey) outboundSafeguards.storeIdempotent(input.organizationId, input.idempotencyKey, "delivery_send_test", requestHash, attemptRecord as unknown as Record<string, unknown>);
     return attemptRecord;
   },
 

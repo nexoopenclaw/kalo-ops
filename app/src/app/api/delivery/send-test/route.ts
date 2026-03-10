@@ -3,7 +3,7 @@ import { deliveryOrchestrator, type DeliveryChannel } from "@/lib/delivery-orche
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as
-    | { organizationId?: string; channel?: DeliveryChannel; recipient?: string; message?: string; maxAttempts?: number; forceFail?: boolean }
+    | { organizationId?: string; channel?: DeliveryChannel; recipient?: string; message?: string; maxAttempts?: number; forceFail?: boolean; idempotencyKey?: string }
     | null;
 
   if (!body?.channel || !["email", "whatsapp", "slack"].includes(body.channel)) {
@@ -23,6 +23,7 @@ export async function POST(request: Request) {
     message,
     maxAttempts: body.maxAttempts,
     forceFail: Boolean(body.forceFail),
+    idempotencyKey: body.idempotencyKey ? String(body.idempotencyKey).trim() : undefined,
   });
 
   return ok(result, 202);

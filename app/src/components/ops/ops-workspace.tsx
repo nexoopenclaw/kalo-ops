@@ -28,11 +28,13 @@ type OpsWorkspaceProps = {
   providerAdapters: ProviderAdapterStatus[];
   backoffConfig: ReplayBackoffConfig;
   featureFlags: FeatureFlagState[];
+  workerJobs: Array<{ id: string; type: string; status: string; attempts: number; retryCount: number; leaseOwner: string | null; updatedAt: string; lastError: string | null }>;
+  globalDryRun: boolean;
 };
 
 const channelLabel: Record<SupportedChannel, string> = { instagram: "Instagram", whatsapp: "WhatsApp", email: "Email" };
 
-export function OpsWorkspace({ initialHealth, initialMetrics, diagnostics, integrity, providerAdapters, backoffConfig, featureFlags }: OpsWorkspaceProps) {
+export function OpsWorkspace({ initialHealth, initialMetrics, diagnostics, integrity, providerAdapters, backoffConfig, featureFlags, workerJobs, globalDryRun }: OpsWorkspaceProps) {
   const [health, setHealth] = useState(initialHealth);
   const [metrics] = useState(initialMetrics);
   const [busy, setBusy] = useState<string | null>(null);
@@ -89,6 +91,25 @@ export function OpsWorkspace({ initialHealth, initialMetrics, diagnostics, integ
           {featureFlags.map((flag) => (
             <p key={flag.key} className="rounded-md border border-white/10 bg-white/[0.02] px-2 py-1">
               {flag.label} · mode <span className={flag.mode === "live" ? "text-emerald-300" : "text-orange-200"}>{flag.mode}</span> · source {flag.source}
+            </p>
+          ))}
+        </div>
+      </section>
+
+      <section className="card p-4 text-sm">
+        <h2 className="text-lg font-semibold">Safeguards outbound</h2>
+        <p className="text-zinc-400">Dry-run global por organización: <span className={globalDryRun ? "text-orange-200" : "text-emerald-300"}>{globalDryRun ? "ACTIVO" : "INACTIVO"}</span></p>
+        <p className="mt-1 text-xs text-zinc-500">Con dry-run activo, aunque el flag live esté ON, los envíos quedan en modo seguro/mock.</p>
+      </section>
+
+      <section className="card p-4 text-sm">
+        <h2 className="text-lg font-semibold">Worker reliability v2</h2>
+        <p className="text-zinc-400">Jobs persistidos con lease/lock y bookkeeping de reintentos.</p>
+        <div className="mt-2 space-y-1 text-xs">
+          {workerJobs.slice(0, 8).map((job) => (
+            <p key={job.id} className="rounded-md border border-white/10 bg-white/[0.02] px-2 py-1">
+              {job.type} · {job.status} · intentos {job.attempts} · retries {job.retryCount} · lease {job.leaseOwner ?? "-"}
+              {job.lastError ? ` · error ${job.lastError}` : ""}
             </p>
           ))}
         </div>

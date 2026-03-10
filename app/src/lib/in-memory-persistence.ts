@@ -220,6 +220,41 @@ export interface BridgeTransitionStore {
   createdAt: string;
 }
 
+
+export interface WorkerJobStore {
+  id: string;
+  organizationId: string;
+  type: "automation" | "webhook_retry" | "digest";
+  status: "pending" | "running" | "completed" | "failed";
+  attempts: number;
+  maxAttempts: number;
+  leaseOwner: string | null;
+  leaseExpiresAt: string | null;
+  lockedAt: string | null;
+  retryCount: number;
+  lastError: string | null;
+  lastAttemptAt: string | null;
+  nextAttemptAt: string | null;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OutboundIdempotencyStore {
+  key: string;
+  organizationId: string;
+  scope: string;
+  requestHash: string;
+  response: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface OrgSafeguardStore {
+  organizationId: string;
+  globalDryRun: boolean;
+  updatedAt: string;
+}
+
 export interface InMemoryPersistenceState {
   voiceConsents: VoiceConsentRecordStore[];
   voiceAuditEvents: VoiceAuditEventStore[];
@@ -239,6 +274,9 @@ export interface InMemoryPersistenceState {
   integrationEventLog: IntegrationEventLogStore[];
   bridgeTransitions: BridgeTransitionStore[];
   revenueBridgeDeadLetters: RevenueBridgeDeadLetterStore[];
+  workerJobs: WorkerJobStore[];
+  outboundIdempotency: OutboundIdempotencyStore[];
+  orgSafeguards: OrgSafeguardStore[];
 }
 
 const state: InMemoryPersistenceState = {
@@ -260,6 +298,9 @@ const state: InMemoryPersistenceState = {
   integrationEventLog: [],
   bridgeTransitions: [],
   revenueBridgeDeadLetters: [],
+  workerJobs: [],
+  outboundIdempotency: [],
+  orgSafeguards: [],
 };
 
 const globalKey = "__kaloOpsInMemoryState__";
