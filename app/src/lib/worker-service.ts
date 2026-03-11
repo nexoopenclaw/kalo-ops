@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { automationQueue } from "@/lib/automation-queue";
 import { digestService } from "@/lib/digest-service";
 import { getPersistenceState, type WorkerJobStore } from "@/lib/in-memory-persistence";
-import { getWebhookMetrics, listWebhookEvents, retryWebhookEvent } from "@/lib/webhook-engine";
+import { getWebhookMetrics, processDueWebhookRetries } from "@/lib/webhook-engine";
 
 export type WorkerJob = WorkerJobStore;
 
@@ -80,8 +80,7 @@ async function execute(job: WorkerJob) {
   }
 
   if (job.type === "webhook_retry") {
-    const retrying = listWebhookEvents({ status: "retrying" }).find((event) => event.organizationId === job.organizationId);
-    if (retrying) await retryWebhookEvent(retrying.id);
+    await processDueWebhookRetries({ organizationId: job.organizationId, limit: 10 });
   }
 
   if (job.type === "digest") {

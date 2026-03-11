@@ -97,6 +97,33 @@ export function listWebhookEvents(filters?: {
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
+export function listDueWebhookRetries(input: { organizationId: string; limit?: number; nowMs?: number }) {
+  const limit = Math.max(1, Math.min(50, input.limit ?? 10));
+  const nowMs = input.nowMs ?? Date.now();
+  const candidates = listWebhookEvents({ status: "retrying" })
+    .filter((event) => event.organizationId === input.organizationId)
+    .filter((event) => {
+      if (!event.nextAttemptAt) return true;
+      return +new Date(event.nextAttemptAt) <= nowMs;
+    });
+
+  return candidates.slice(0, limit);
+}
+
+export async function processDueWebhookRetries(input: { organizationId: string; limit?: number }) {
+  const due = listDueWebhookRetries({ organizationId: input.organizationId, limit: input.limit });
+  const results = [] as Array<{ id: string; status: WebhookEventStatus; retryCount: number; nextAttemptAt: string | null }>;
+
+  for (const event of due) {
+    const updated = await retryWebhookEvent(event.id);
+    if (updated) {
+      results.push({ id: updated.id, status: updated.status, retryCount: updated.retryCount, nextAttemptAt: updated.nextAttemptAt });
+    }
+  }
+
+  return { attempted: due.length, updated: results.length, results };
+}
+
 export function getWebhookEventById(id: string): WebhookEventStore | undefined {
   return getPersistenceState().webhookEvents.find((event) => event.id === id);
 }
