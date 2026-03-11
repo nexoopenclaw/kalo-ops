@@ -39,6 +39,11 @@ Providers (env vars esperadas):
 
 - [ ] `npm run lint`
 - [ ] `npm run build`
+- [ ] **Remote go-live smoke** (recomendado en staging/prod):
+  - [ ] `APP_URL=https://<domain> HEALTH_ENDPOINT_TOKEN=... npm run smoke:go-live`
+  - Valida: `/api/health`, `/api/health/config`, `/api/health/go-live`.
+- [ ] **Remote cron/worker smoke** (si usamos cron para retries/digest):
+  - [ ] `APP_URL=https://<domain> CRON_JOB_TOKEN=... npm run smoke:cron-worker -- --iterations 3`
 - [ ] Login / onboarding básico.
 - [ ] Inbox UI carga sin romper.
 - [ ] Al menos 1 evento de webhook (Stripe o Calendly) impacta en estado.
