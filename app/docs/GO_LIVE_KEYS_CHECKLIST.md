@@ -66,6 +66,10 @@ Checklist operativo para dejar **Kalo Ops keys-ready** y pasar a producción sin
    - Esperado: `isFullyConfigured=true`
    - Esperado: `missingKeys=[]`
 3. Ejecutar `POST /api/integrations/test/:provider` para cada proveedor:
+   - **Por defecto** corre un test “mock-safe” (solo valida presencia de env).
+   - Para hacer un **live ping real** contra los proveedores, setear en el deploy:
+     - `INTEGRATIONS_LIVE_TESTS=1`
+     - (opcional) `INTEGRATIONS_TEST_TIMEOUT_MS=8000`
    - Esperado: `status=ok`
 4. Disparar pruebas funcionales reales:
    - Webhook de Stripe de prueba
