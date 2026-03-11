@@ -5,6 +5,7 @@ Source audited: `../docs/KALO-OPS-PRD-v1.md` vs local code in `app/` only.
 | Area | Status | Evidence | Next |
 |---|---|---|---|
 | Foundation: Next.js + Supabase scaffold | Partial | `package.json`, `src/lib/supabase/*`, `db/schema.sql` | Wire prod Supabase env + run migrations in shared envs.
+| Go-live: keys-ready + health config checks | Partial | `GET /api/health/config`, `docs/GO_LIVE_CHECKLIST.md` | Add deploy-specific smoke tests + optionally protect the config endpoint.
 | RF-001 Auth + org roles | Partial | `src/app/auth/login/page.tsx`, `src/app/auth/register/page.tsx`, tables `organizations/profiles/memberships` | Enforce role guards in UI/API and complete invite flow.
 | Multi-tenant + data model breadth | Partial | `db/schema.sql` includes org-scoped tables across inbox/CRM/automation/reporting | Replace remaining mock-state reads with DB-backed queries.
 | Security (RLS/policies) | Partial | `db/schema.sql` enables RLS on many tables but most policies are commented stubs | Implement + test RLS policies per table before prod.
@@ -14,8 +15,8 @@ Source audited: `../docs/KALO-OPS-PRD-v1.md` vs local code in `app/` only.
 | Meta webhook ingestion | Partial | `src/app/api/webhooks/meta/route.ts`, `src/lib/webhook-engine.ts` | Map real tenant IDs + strengthen signature/idempotency checks.
 | CRM + pipeline core | Partial | `src/app/(app)/crm/page.tsx`, `src/lib/crm-service.ts`, `/api/deals/*` | Add Kanban DnD persistence and stage transition rules.
 | Deal history + objections model | Partial | `db/schema.sql` tables `deal_stage_history`, `deal_objections` | Expose full UI + reporting filters from these tables.
-| Calendly booking integration (MVP req) | Missing | No Calendly route/adapter found in `src/app/api` or `src/lib` | Add booking webhook + auto-stage to `booked`.
-| Stripe payment close-won (MVP req) | Missing | No Stripe webhook/adapter found | Add Stripe webhook to mark deals `won` and update revenue.
+| Calendly booking integration (MVP req) | Partial | `src/app/api/webhooks/calendly/route.ts` (signature + adapter dispatch) | Map booking → org/deal and auto-stage to `booked`.
+| Stripe payment close-won (MVP req) | Partial | `src/app/api/webhooks/stripe/route.ts` (verification + adapter dispatch) | Map checkout/customer → deal and update revenue safely.
 | Automation engine | Partial | `src/app/(app)/automations/page.tsx`, `/api/automations/*`, tables `automations/automation_logs` | Add background executor + persisted run logs.
 | AI Copilot | Partial | `src/app/(app)/copilot/page.tsx`, `/api/copilot/*`, table `ai_interactions` | Integrate real LLM provider + latency/feedback telemetry.
 | Voice notes + compliance | Partial | `src/app/(app)/voice-lab/page.tsx`, `/api/voice/*`, tables `voice_consents/voice_notes_audit` | Connect real TTS provider + immutable audit storage.
