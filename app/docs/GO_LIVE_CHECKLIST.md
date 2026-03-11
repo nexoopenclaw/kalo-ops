@@ -14,6 +14,11 @@ Objetivo: poder desplegar y validar que la app está **keys-ready**, webhooks fu
 ### Cron (worker tick)
 - `CRON_JOB_TOKEN`
 
+### Guardrail (persistencia)
+- `ALLOW_IN_MEMORY_PERSISTENCE` (default: false)
+  - En runtime **production**, el endpoint `/api/health/go-live` falla si esto no está en `true`.
+  - Objetivo: obligar a decidir explícitamente si aceptamos el riesgo de persistencia in-memory hasta migrar a Supabase.
+
 ### Meta (IG/WA webhooks)
 - `META_APP_SECRET`
 

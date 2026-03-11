@@ -17,6 +17,12 @@ export interface GoLiveCheckResult {
       hint?: string;
       error?: string;
     };
+    persistence: {
+      ok: boolean;
+      mode: "in_memory";
+      envAllowsInMemory: boolean;
+      hint?: string;
+    };
   };
   meta: {
     service: "kalo-ops-app";
@@ -26,6 +32,17 @@ export interface GoLiveCheckResult {
       gitCommitSha?: string;
     };
   };
+}
+
+function isProductionRuntime() {
+  const nodeEnv = (process.env.NODE_ENV ?? "").toLowerCase();
+  const vercelEnv = (process.env.VERCEL_ENV ?? "").toLowerCase();
+  // If either says production, treat as prod.
+  return nodeEnv === "production" || vercelEnv === "production";
+}
+
+function envAllowsInMemoryPersistence() {
+  return (process.env.ALLOW_IN_MEMORY_PERSISTENCE ?? "").trim().toLowerCase() === "true";
 }
 
 export const goLiveCheckService = {
@@ -44,7 +61,8 @@ export const goLiveCheckService = {
       if (error) {
         supabaseOk = false;
         supabaseError = error.message;
-        supabaseHint = "Run migrations and verify env vars NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY.";
+        supabaseHint =
+          "Run migrations and verify env vars NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY.";
       } else {
         supabaseOk = true;
       }
@@ -54,7 +72,13 @@ export const goLiveCheckService = {
       supabaseHint = "Verify Supabase env vars and network access.";
     }
 
-    const ok = config.ok && supabaseOk;
+    // IMPORTANT: Today several subsystems persist in memory (worker jobs, webhook retries, reporting snapshots, etc).
+    // This is fine for local/dev but dangerous in production unless explicitly acknowledged.
+    const inProd = isProductionRuntime();
+    const allowInMemory = envAllowsInMemoryPersistence();
+    const persistenceOk = !inProd || allowInMemory;
+
+    const ok = config.ok && supabaseOk && persistenceOk;
 
     return {
       ok,
@@ -71,6 +95,14 @@ export const goLiveCheckService = {
           ok: supabaseOk,
           error: supabaseError,
           hint: supabaseHint,
+        },
+        persistence: {
+          ok: persistenceOk,
+          mode: "in_memory",
+          envAllowsInMemory: allowInMemory,
+          hint: persistenceOk
+            ? undefined
+            : "Production runtime detected, but ALLOW_IN_MEMORY_PERSISTENCE is not true. Either migrate persistence to Supabase (recommended) or set ALLOW_IN_MEMORY_PERSISTENCE=true explicitly to acknowledge the risk.",
         },
       },
       meta: {
