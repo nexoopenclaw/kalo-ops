@@ -760,8 +760,11 @@ create table if not exists public.webhook_events (
   organization_id uuid not null references public.organizations(id) on delete cascade,
   channel text not null check (channel in ('instagram', 'whatsapp', 'email')),
   external_id text not null,
-  idempotency_key text not null unique,
+  idempotency_key text not null,
   payload_json jsonb not null default '{}'::jsonb,
+  -- Observability: store normalized envelope + processing log entries
+  normalized_payload jsonb not null default '{}'::jsonb,
+  processing_log jsonb not null default '[]'::jsonb,
   status text not null default 'processed' check (status in ('processed', 'retrying', 'failed_permanent')),
   retry_count int not null default 0 check (retry_count >= 0),
   max_retries int not null default 3 check (max_retries >= 1),
@@ -769,7 +772,8 @@ create table if not exists public.webhook_events (
   latency_ms int not null default 0,
   error_message text,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  unique (organization_id, idempotency_key)
 );
 
 create table if not exists public.dead_letter_events (
