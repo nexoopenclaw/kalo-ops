@@ -20,6 +20,7 @@ const navItems = [
   { href: "/webhooks", label: "Webhooks" },
   { href: "/simulator", label: "Simulator" },
   { href: "/integraciones", label: "Integraciones" },
+  { href: "/settings", label: "Settings" },
   { href: "/config", label: "Config" },
   { href: "/qa", label: "QA" },
 ];
