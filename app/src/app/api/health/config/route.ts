@@ -25,6 +25,8 @@ export async function GET(request: Request) {
       service: "kalo-ops-app",
       kind: "config",
       missing: health.missing,
+      requiredMissing: health.requiredMissing,
+      recommendedMissing: health.recommendedMissing,
       configured: health.configured,
       timestamp: new Date().toISOString(),
     },

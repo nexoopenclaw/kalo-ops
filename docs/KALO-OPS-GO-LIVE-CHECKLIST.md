@@ -4,8 +4,8 @@ Objetivo: pasar de "anda en dev" a "safe en producción" con lo mínimo necesari
 
 ## 1) Config & Secrets (keys-ready)
 
-- [ ] Setear `HEALTH_ENDPOINT_TOKEN` (protege endpoints de health/config).
-- [ ] Verificar `/api/health/config` (con header `x-health-token`) → **missing = []**.
+- [ ] Setear `HEALTH_ENDPOINT_TOKEN` (recomendado en prod: protege endpoints de health/config).
+- [ ] Verificar `/api/health/config` (con header `x-health-token`) → **requiredMissing = []** (y idealmente `recommendedMissing` lo más vacío posible).
 - [ ] Verificar `/api/health/go-live` (con header `x-health-token`) → **ok=true**.
 
 Providers (env vars esperadas):

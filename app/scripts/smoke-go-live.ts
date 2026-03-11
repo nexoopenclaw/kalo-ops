@@ -110,8 +110,9 @@ function printHuman(
   }
 
   console.log("\nConfig:");
-  console.log(`  ok: ${result.checks.config.ok ? "YES" : "NO"}`);
-  console.log(`  missing: ${result.checks.config.missing.join(", ") || "(none)"}`);
+  console.log(`  ok (required): ${result.checks.config.ok ? "YES" : "NO"}`);
+  console.log(`  requiredMissing: ${result.checks.config.requiredMissing?.join(", ") || "(none)"}`);
+  console.log(`  recommendedMissing: ${result.checks.config.recommendedMissing?.join(", ") || "(none)"}`);
 
   console.log("\nSupabase:");
   console.log(`  ok: ${result.checks.supabase.ok ? "YES" : "NO"}`);

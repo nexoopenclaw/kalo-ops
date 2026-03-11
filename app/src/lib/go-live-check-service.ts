@@ -9,6 +9,8 @@ export interface GoLiveCheckResult {
       ok: boolean;
       missing: string[];
       configured: Record<string, boolean>;
+      requiredMissing: string[];
+      recommendedMissing: string[];
     };
     supabase: {
       ok: boolean;
@@ -62,6 +64,8 @@ export const goLiveCheckService = {
           ok: config.ok,
           missing: config.missing,
           configured: config.configured,
+          requiredMissing: config.requiredMissing,
+          recommendedMissing: config.recommendedMissing,
         },
         supabase: {
           ok: supabaseOk,
