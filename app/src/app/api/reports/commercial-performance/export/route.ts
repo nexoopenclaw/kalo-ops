@@ -1,20 +1,35 @@
+import { fail } from "@/lib/api-response";
 import { reportingService } from "@/lib/reporting-service";
 import { toCsv } from "@/lib/csv";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const organizationId = (url.searchParams.get("organizationId") ?? "org_1").trim();
+  const organizationId = url.searchParams.get("organizationId")?.trim();
   const from = url.searchParams.get("from") ?? undefined;
   const to = url.searchParams.get("to") ?? undefined;
   const format = (url.searchParams.get("format") ?? "csv").trim();
 
+  if (!organizationId) {
+    return fail(
+      {
+        code: "MISSING_ORGANIZATION_ID",
+        message: "Query param 'organizationId' is required.",
+      },
+      400,
+    );
+  }
+
   const data = await reportingService.commercialPerformance(organizationId, from, to);
 
   if (format !== "csv") {
-    return new Response(JSON.stringify({ ok: false, error: "Unsupported format", supported: ["csv"] }), {
-      status: 400,
-      headers: { "content-type": "application/json" },
-    });
+    return fail(
+      {
+        code: "UNSUPPORTED_FORMAT",
+        message: "Unsupported format",
+        details: { supported: ["csv"] },
+      },
+      400,
+    );
   }
 
   const rows = data.aging.map((a) => ({

@@ -121,8 +121,10 @@ curl -X POST "$APP_URL/api/cron/worker-tick?iterations=10" \
 
 ## 5) Reporting exports (CSV)
 Endpoints listos para descargar CSV (útil para compartir con equipo/cliente):
-- `GET /api/reports/commercial-performance/export?format=csv&organizationId=org_1`
-- `GET /api/reports/attribution-performance/export?format=csv&organizationId=org_1`
+- `GET /api/reports/commercial-performance/export?format=csv&organizationId=<org_id>`
+- `GET /api/reports/attribution-performance/export?format=csv&organizationId=<org_id>`
+
+Nota: `organizationId` es **requerido** (sin default) para evitar descargas accidentales del org equivocado.
 
 Nota: actualmente exportan el subset disponible (mock/in-memory). Cuando reporting se conecte full a Supabase, estos exports quedan como interfaz estable.
 
