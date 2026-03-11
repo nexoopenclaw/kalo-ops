@@ -11,6 +11,9 @@ Objetivo: poder desplegar y validar que la app está **keys-ready**, webhooks fu
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
+### Cron (worker tick)
+- `CRON_JOB_TOKEN`
+
 ### Meta (IG/WA webhooks)
 - `META_APP_SECRET`
 

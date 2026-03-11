@@ -13,10 +13,15 @@ export function getConfigHealth(): ConfigHealth {
     "NEXT_PUBLIC_SUPABASE_URL",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY",
     "SUPABASE_SERVICE_ROLE_KEY",
+
+    // Webhooks (keys-ready)
     "META_APP_SECRET",
     "STRIPE_SECRET_KEY",
     "STRIPE_WEBHOOK_SECRET",
     "CALENDLY_WEBHOOK_SIGNING_KEY",
+
+    // Reliability: worker tick cron endpoint must be protected + configured for go-live.
+    "CRON_JOB_TOKEN",
   ] as const;
 
   const configured: Record<string, boolean> = {};
