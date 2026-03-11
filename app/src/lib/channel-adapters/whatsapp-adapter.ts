@@ -20,7 +20,7 @@ export const whatsappAdapter: ChannelAdapter = {
     return {
       adapter: "whatsapp",
       status: "queued",
-      externalMessageId: `wa_${Date.now()}`,
+      externalMessageId: `wa_${input.conversationId}_${Date.now()}`,
       queuedAt: new Date().toISOString(),
     };
   },

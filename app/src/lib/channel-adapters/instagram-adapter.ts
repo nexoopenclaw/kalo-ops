@@ -20,7 +20,7 @@ export const instagramAdapter: ChannelAdapter = {
     return {
       adapter: "instagram",
       status: "queued",
-      externalMessageId: `ig_${Date.now()}`,
+      externalMessageId: `ig_${input.conversationId}_${Date.now()}`, 
       queuedAt: new Date().toISOString(),
     };
   },

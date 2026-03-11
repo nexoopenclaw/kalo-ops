@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { AutomationActionType, AutomationTriggerType, AutomationWorkflow } from "@/lib/automation-service";
+import type { AutomationTriggerType, AutomationWorkflow } from "@/lib/automation-service";
 
 const triggerLabels: Record<AutomationTriggerType, string> = {
   silence: "Silencio",
@@ -11,13 +11,7 @@ const triggerLabels: Record<AutomationTriggerType, string> = {
   payment: "Pago",
 };
 
-const actionLabels: Record<AutomationActionType, string> = {
-  send_message: "Enviar mensaje",
-  change_status: "Cambiar status",
-  assign_setter: "Asignar setter",
-  notify: "Notificar",
-  add_tag: "Añadir tag",
-};
+// actionLabels reserved for future: map ActionType -> label (when showing actions in the UI).
 
 type Props = { initialWorkflows: AutomationWorkflow[] };
 

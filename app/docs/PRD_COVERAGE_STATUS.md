@@ -1,6 +1,6 @@
 # PRD Coverage Status (Light Audit)
 
-Source audited: `../docs/KALO-OPS-PRD-v1.md` vs local code in `app/` only.
+Source audited: sprint PRDs in `docs/SPRINT_*` vs local code in `app/` only (full PRD master file pending).
 
 | Area | Status | Evidence | Next |
 |---|---|---|---|

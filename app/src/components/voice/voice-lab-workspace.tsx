@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ExperimentRecord, ExperimentResults, VoiceAuditLog, VoiceComplianceStatus, VoicePreviewResult } from "@/lib/voice-service";
 
 type Props = {
@@ -40,20 +40,20 @@ export function VoiceLabWorkspace({ actorUserId, organizationId, leadId, voiceMo
     return `Ganadora variante ${results.winner.variant}`;
   }, [results]);
 
-  const refreshCompliance = async () => {
+  const refreshCompliance = useCallback(async () => {
     const response = await fetch(`/api/voice/compliance?organizationId=${organizationId}&leadId=${leadId}`);
     const payload = (await response.json()) as { ok: boolean; data?: VoiceComplianceStatus };
     if (payload.ok && payload.data) {
       setCompliance(payload.data);
       setConsentGranted(payload.data.consentStatus === "granted");
     }
-  };
+  }, [organizationId, leadId]);
 
-  const refreshAudit = async () => {
+  const refreshAudit = useCallback(async () => {
     const response = await fetch(`/api/voice/audit?organizationId=${organizationId}&leadId=${leadId}`);
     const payload = (await response.json()) as { ok: boolean; data?: VoiceAuditLog[] };
     if (payload.ok && payload.data) setAuditLogs(payload.data);
-  };
+  }, [organizationId, leadId]);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -61,7 +61,7 @@ export function VoiceLabWorkspace({ actorUserId, organizationId, leadId, voiceMo
       void refreshAudit();
     }, 0);
     return () => clearTimeout(t);
-  }, []);
+  }, [refreshCompliance, refreshAudit]);
 
   const saveConsent = async (nextValue: boolean) => {
     setUiError(null);

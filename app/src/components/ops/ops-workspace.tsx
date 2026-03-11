@@ -34,7 +34,7 @@ type OpsWorkspaceProps = {
 
 const channelLabel: Record<SupportedChannel, string> = { instagram: "Instagram", whatsapp: "WhatsApp", email: "Email" };
 
-export function OpsWorkspace({ initialHealth, initialMetrics, diagnostics, integrity, providerAdapters, backoffConfig, featureFlags, workerJobs, globalDryRun }: OpsWorkspaceProps) {
+export function OpsWorkspace({ initialHealth, initialMetrics, providerAdapters, backoffConfig, featureFlags, workerJobs, globalDryRun }: OpsWorkspaceProps) {
   const [health, setHealth] = useState(initialHealth);
   const [metrics] = useState(initialMetrics);
   const [busy, setBusy] = useState<string | null>(null);

@@ -20,7 +20,7 @@ export const emailAdapter: ChannelAdapter = {
     return {
       adapter: "email",
       status: "queued",
-      externalMessageId: `em_${Date.now()}`,
+      externalMessageId: `em_${input.conversationId}_${Date.now()}`,
       queuedAt: new Date().toISOString(),
     };
   },
