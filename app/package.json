@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "smoke:go-live": "tsx scripts/smoke-go-live.ts"
+    "smoke:go-live": "tsx scripts/smoke-go-live.ts",
+    "smoke:cron-worker": "tsx scripts/smoke-cron-worker.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",

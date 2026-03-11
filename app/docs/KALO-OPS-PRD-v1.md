@@ -57,6 +57,10 @@ Checklist operativa:
 - `GO_LIVE_KEYS_CHECKLIST.md`
 - `GO_LIVE_CHECKLIST.md`
 
+Smoke tests (recomendado para CI/Deploy):
+- `npm run smoke:go-live` (health + config + Supabase)
+- `npm run smoke:cron-worker` (endpoint cron protegido)
+
 ## 5) Integraciones (keys-ready)
 - Meta: webhook + signature + tenant routing + event ingestion.
 - Stripe: webhook + mapping deal/customer + revenue update.

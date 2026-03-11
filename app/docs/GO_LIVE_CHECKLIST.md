@@ -81,6 +81,21 @@ La app tiene un worker “light” que procesa:
 - automations
 - digests
 
+### Cron smoke test (recomendado)
+
+Remote (pega al deployment y valida que el endpoint protegido responde OK):
+
+```bash
+APP_URL=https://<tu-dominio> CRON_JOB_TOKEN=*** npm run smoke:cron-worker
+# machine-readable for CI logs
+npm run smoke:cron-worker -- --url https://<tu-dominio> --json
+```
+
+Notas:
+- Requiere `CRON_JOB_TOKEN` local para poder llamar al endpoint.
+- Opción: `--orgId <id>` para probar un tenant específico.
+- Falla con exit code 1 si devuelve 4xx/5xx o si no puede conectar.
+
 ### Endpoint (cron)
 - `POST /api/cron/worker-tick` (opcional `?orgId=<id>`)
 - Opcional: `?iterations=<n>` para ejecutar varios ticks seguidos (default: 3, max: 20). Útil para drenar backlog sin subir frecuencia del cron.
