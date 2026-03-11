@@ -96,7 +96,14 @@ curl -X POST "$APP_URL/api/cron/worker-tick?iterations=10" \
   -H "x-cron-token: $CRON_JOB_TOKEN"
 ```
 
-## 5) Post-deploy
+## 5) Reporting exports (CSV)
+Endpoints listos para descargar CSV (útil para compartir con equipo/cliente):
+- `GET /api/reports/commercial-performance/export?format=csv&organizationId=org_1`
+- `GET /api/reports/attribution-performance/export?format=csv&organizationId=org_1`
+
+Nota: actualmente exportan el subset disponible (mock/in-memory). Cuando reporting se conecte full a Supabase, estos exports quedan como interfaz estable.
+
+## 6) Post-deploy
 - Confirmar que la app compila (`npm run build`).
 - Confirmar que los endpoints de health están accesibles.
 - Revisar logs de webhooks (Stripe/Calendly/Meta) por 10-15 min y verificar que no hay `INVALID_SIGNATURE` / `NOT_CONFIGURED`.

@@ -1,7 +1,16 @@
 import { attributionService } from "@/lib/attribution-service";
 import { reportingService } from "@/lib/reporting-service";
 
-const exportsMock = ["Exportar PDF", "Exportar CSV"];
+const exportLinks = [
+  {
+    label: "Exportar CSV · Performance comercial",
+    href: "/api/reports/commercial-performance/export?format=csv&organizationId=org_1",
+  },
+  {
+    label: "Exportar CSV · Attribution performance",
+    href: "/api/reports/attribution-performance/export?format=csv&organizationId=org_1",
+  },
+];
 const alertRuleLabels: Record<string, string> = {
   vip_no_response: "VIP sin respuesta",
   show_up_drop: "Caída de show-up rate",
@@ -90,15 +99,19 @@ export default async function ReportesPage() {
         </article>
 
         <article className="card p-4">
-          <h2 className="text-lg font-semibold">Exports (mock)</h2>
+          <h2 className="text-lg font-semibold">Exports</h2>
           <div className="mt-3 space-y-2">
-            {exportsMock.map((label) => (
-              <button key={label} className="w-full rounded-lg border border-[#d4e83a]/35 bg-[#d4e83a]/10 px-3 py-2 text-left text-sm text-[#d4e83a] hover:bg-[#d4e83a]/15">
-                {label}
-              </button>
+            {exportLinks.map((item) => (
+              <a
+                key={item.href}
+                href={item.href}
+                className="block w-full rounded-lg border border-[#d4e83a]/35 bg-[#d4e83a]/10 px-3 py-2 text-left text-sm text-[#d4e83a] hover:bg-[#d4e83a]/15"
+              >
+                {item.label}
+              </a>
             ))}
           </div>
-          <p className="mt-3 text-xs text-zinc-500">Placeholders listos para conectar render real PDF/CSV.</p>
+          <p className="mt-3 text-xs text-zinc-500">CSV listo para compartir/analizar. PDF pendiente.</p>
         </article>
       </section>
     </main>
