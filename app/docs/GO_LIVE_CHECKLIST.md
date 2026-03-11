@@ -37,7 +37,7 @@ npm run smoke:go-live
 npm run smoke:go-live -- --json
 ```
 
-Remote (pega al deployment y valida `/api/health/go-live`):
+Remote (pega al deployment y valida `/api/health`, `/api/health/config` y `/api/health/go-live`):
 
 ```bash
 APP_URL=https://<tu-dominio> npm run smoke:go-live
