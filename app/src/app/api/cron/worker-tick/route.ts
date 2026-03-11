@@ -41,16 +41,53 @@ export async function POST(request: Request) {
   try {
     const url = new URL(request.url);
     const orgId = url.searchParams.get("orgId");
+    const iterationsRaw = url.searchParams.get("iterations");
+
+    const iterationsParsed = iterationsRaw ? Number(iterationsRaw) : 3;
+    const iterations = Number.isFinite(iterationsParsed) ? Math.floor(iterationsParsed) : 3;
+    const clampedIterations = Math.max(1, Math.min(20, iterations));
 
     const organizationIds = await resolveOrganizationIds(orgId);
 
-    const results = [] as Array<{ organizationId: string; tick: unknown }>;
+    const results = [] as Array<{
+      organizationId: string;
+      iterations: number;
+      ran: number;
+      stoppedBecause: "no_pending_jobs" | "max_iterations";
+      ticks: unknown[];
+    }>;
+
     for (const organizationId of organizationIds) {
-      const tick = await workerService.tick(organizationId);
-      results.push({ organizationId, tick });
+      const ticks: unknown[] = [];
+      let ran = 0;
+      let stoppedBecause: "no_pending_jobs" | "max_iterations" = "max_iterations";
+
+      for (let i = 0; i < clampedIterations; i++) {
+        const tick = await workerService.tick(organizationId);
+        ticks.push(tick);
+        ran += 1;
+
+        if (typeof tick === "object" && tick && "ran" in tick && (tick as { ran?: boolean }).ran === false) {
+          stoppedBecause = "no_pending_jobs";
+          break;
+        }
+      }
+
+      results.push({
+        organizationId,
+        iterations: clampedIterations,
+        ran,
+        stoppedBecause,
+        ticks,
+      });
     }
 
-    return ok({ ranAt: new Date().toISOString(), organizations: organizationIds.length, results });
+    return ok({
+      ranAt: new Date().toISOString(),
+      organizations: organizationIds.length,
+      iterations: clampedIterations,
+      results,
+    });
   } catch (error) {
     return fail(
       {

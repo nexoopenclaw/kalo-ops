@@ -83,6 +83,7 @@ La app tiene un worker “light” que procesa:
 
 ### Endpoint (cron)
 - `POST /api/cron/worker-tick` (opcional `?orgId=<id>`)
+- Opcional: `?iterations=<n>` para ejecutar varios ticks seguidos (default: 3, max: 20). Útil para drenar backlog sin subir frecuencia del cron.
 - Requiere:
   - env `CRON_JOB_TOKEN`
   - header `x-cron-token: <CRON_JOB_TOKEN>`
@@ -91,7 +92,7 @@ Recomendación: configurar un cron externo (Vercel Cron / GitHub Actions / cualq
 
 Validación rápida:
 ```bash
-curl -X POST "$APP_URL/api/cron/worker-tick" \
+curl -X POST "$APP_URL/api/cron/worker-tick?iterations=10" \
   -H "x-cron-token: $CRON_JOB_TOKEN"
 ```
 
