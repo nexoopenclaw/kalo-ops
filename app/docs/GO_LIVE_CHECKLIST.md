@@ -26,6 +26,10 @@ Objetivo: poder desplegar y validar que la app está **keys-ready**, webhooks fu
 - `GET /api/health` → alive
 - `GET /api/health/config` → **503 si faltan keys** (no expone valores, solo booleanos)
 
+Opcional (recomendado en prod): proteger `GET /api/health/config` con header.
+- Setear `HEALTH_ENDPOINT_TOKEN`
+- Llamar con: `x-health-token: <token>`
+
 Validación esperada para go-live:
 - `/api/health/config` devuelve `ok: true`.
 

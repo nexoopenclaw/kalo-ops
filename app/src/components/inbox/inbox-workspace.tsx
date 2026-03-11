@@ -95,8 +95,11 @@ export function InboxWorkspace({ initialConversations, initialMessagesByConversa
         void supabase.removeChannel(channel);
       };
     } catch {
-      setRealtimeStatus("offline");
-      return () => clearInterval(fallbackPoll);
+      const t = setTimeout(() => setRealtimeStatus("offline"), 0);
+      return () => {
+        clearTimeout(t);
+        clearInterval(fallbackPoll);
+      };
     }
   }, [setters]);
 

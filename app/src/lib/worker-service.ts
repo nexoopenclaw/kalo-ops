@@ -4,7 +4,7 @@ import { digestService } from "@/lib/digest-service";
 import { getPersistenceState, type WorkerJobStore } from "@/lib/in-memory-persistence";
 import { getWebhookMetrics, listWebhookEvents, retryWebhookEvent } from "@/lib/webhook-engine";
 
-export interface WorkerJob extends WorkerJobStore {}
+export type WorkerJob = WorkerJobStore;
 
 const LEASE_MS = 30_000;
 

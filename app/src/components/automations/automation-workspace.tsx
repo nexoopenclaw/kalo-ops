@@ -59,7 +59,10 @@ export function AutomationWorkspace({ initialWorkflows }: Props) {
   };
 
   useEffect(() => {
-    void refreshExecutionCenter();
+    const t = setTimeout(() => {
+      void refreshExecutionCenter();
+    }, 0);
+    return () => clearTimeout(t);
   }, []);
 
   const runManualTrigger = async () => {

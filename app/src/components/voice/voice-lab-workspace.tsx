@@ -56,8 +56,11 @@ export function VoiceLabWorkspace({ actorUserId, organizationId, leadId, voiceMo
   };
 
   useEffect(() => {
-    void refreshCompliance();
-    void refreshAudit();
+    const t = setTimeout(() => {
+      void refreshCompliance();
+      void refreshAudit();
+    }, 0);
+    return () => clearTimeout(t);
   }, []);
 
   const saveConsent = async (nextValue: boolean) => {
