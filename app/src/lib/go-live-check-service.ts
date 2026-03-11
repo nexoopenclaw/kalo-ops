@@ -1,5 +1,5 @@
 import { getConfigHealth } from "@/lib/config-health";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 export interface GoLiveCheckResult {
   ok: boolean;
@@ -8,7 +8,7 @@ export interface GoLiveCheckResult {
     config: {
       ok: boolean;
       missing: string[];
-      configured: string[];
+      configured: Record<string, boolean>;
     };
     supabase: {
       ok: boolean;
@@ -37,7 +37,7 @@ export const goLiveCheckService = {
     let supabaseHint: string | undefined;
 
     try {
-      const supabase = createSupabaseServerClient();
+      const supabase = createSupabaseServiceRoleClient();
       const { error } = await supabase.from("organizations").select("id", { count: "exact", head: true }).limit(1);
       if (error) {
         supabaseOk = false;

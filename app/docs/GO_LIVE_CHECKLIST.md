@@ -25,6 +25,19 @@ Objetivo: poder desplegar y validar que la app está **keys-ready**, webhooks fu
 
 - `GET /api/health` → alive
 - `GET /api/health/config` → **503 si faltan keys** (no expone valores, solo booleanos)
+- `GET /api/health/go-live` → agrega chequeo de Supabase (tabla `organizations`) + config.
+
+### Deploy smoke test (recomendado)
+
+```bash
+npm run smoke:go-live
+# machine-readable for CI logs
+npm run smoke:go-live -- --json
+```
+
+Notas:
+- Requiere env vars reales (ver `.env.example`).
+- Falla con exit code 1 si algo crítico no está ok.
 
 Opcional (recomendado en prod): proteger `GET /api/health/config` con header.
 - Setear `HEALTH_ENDPOINT_TOKEN`
