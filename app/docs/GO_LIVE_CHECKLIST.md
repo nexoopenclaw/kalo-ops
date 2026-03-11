@@ -26,9 +26,12 @@ Objetivo: poder desplegar y validar que la app está **keys-ready**, webhooks fu
 
 ## 2) Endpoints de health
 
-- `GET /api/health` → alive
+- `GET /api/health` → alive (incluye `runtime` para debug)
 - `GET /api/health/config` → **503 si faltan keys** (no expone valores, solo booleanos)
 - `GET /api/health/go-live` → agrega chequeo de Supabase (tabla `organizations`) + config.
+
+Notas:
+- Todos los endpoints de health responden con `cache-control: no-store` (evita caches/CDN engañosos en prod).
 
 ### Deploy smoke test (recomendado)
 

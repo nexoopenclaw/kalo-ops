@@ -17,5 +17,10 @@ export async function GET(request: Request) {
   if (denied) return denied;
 
   const data = await goLiveCheckService.run();
-  return NextResponse.json(data, { status: data.ok ? 200 : 503 });
+  return NextResponse.json(data, {
+    status: data.ok ? 200 : 503,
+    headers: {
+      "cache-control": "no-store",
+    },
+  });
 }

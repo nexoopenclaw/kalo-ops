@@ -30,6 +30,11 @@ export async function GET(request: Request) {
       configured: health.configured,
       timestamp: new Date().toISOString(),
     },
-    { status: health.ok ? 200 : 503 },
+    {
+      status: health.ok ? 200 : 503,
+      headers: {
+        "cache-control": "no-store",
+      },
+    },
   );
 }
