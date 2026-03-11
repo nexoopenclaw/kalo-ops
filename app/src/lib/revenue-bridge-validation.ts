@@ -90,8 +90,24 @@ export function validateStripeWebhook(payload: unknown): ValidationResult<{
 
   const metadata = asRecord(object?.metadata);
   const customerEmail = String(object?.customer_email ?? object?.receipt_email ?? metadata?.email ?? "").trim().toLowerCase();
-  const amountRaw = object?.amount_received;
-  const amount = typeof amountRaw === "number" ? amountRaw / 100 : undefined;
+
+  const amountCents =
+    typeof object?.amount_received === "number"
+      ? object.amount_received
+      : typeof object?.amount_total === "number"
+        ? object.amount_total
+        : undefined;
+  const amount = typeof amountCents === "number" ? amountCents / 100 : undefined;
+
+  const dealId =
+    typeof metadata?.deal_id === "string"
+      ? metadata.deal_id
+      : typeof object?.client_reference_id === "string"
+        ? object.client_reference_id
+        : undefined;
+
+  const paymentIntentId =
+    typeof object?.payment_intent === "string" ? object.payment_intent : typeof object?.id === "string" ? object.id : undefined;
 
   return {
     ok: true,
@@ -101,8 +117,8 @@ export function validateStripeWebhook(payload: unknown): ValidationResult<{
       customerEmail: customerEmail || undefined,
       amount,
       currency: typeof object?.currency === "string" ? object.currency.toUpperCase() : undefined,
-      dealId: typeof metadata?.deal_id === "string" ? metadata.deal_id : undefined,
-      paymentIntentId: typeof object?.id === "string" ? object.id : undefined,
+      dealId,
+      paymentIntentId,
       raw: root ?? {},
     },
   };
