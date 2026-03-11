@@ -191,8 +191,14 @@ create index if not exists deal_objections_deal_status_idx on public.deal_object
 create index if not exists deal_objections_org_created_idx on public.deal_objections (organization_id, created_at desc);
 
 -- =====================================================
--- RLS BASELINE + POLICY STUBS
+-- RLS BASELINE + POLICIES (production-ready MVP)
 -- =====================================================
+-- Goal: ensure all org-scoped tables are tenant-isolated.
+-- Notes:
+-- - These policies are intentionally simple (member-of-org gates everything).
+-- - For admin-only mutations (memberships), we additionally gate by role.
+-- - Keep INSERT/UPDATE guarded via WITH CHECK.
+
 alter table public.organizations enable row level security;
 alter table public.profiles enable row level security;
 alter table public.memberships enable row level security;
@@ -203,89 +209,167 @@ alter table public.deals enable row level security;
 alter table public.deal_stage_history enable row level security;
 alter table public.deal_objections enable row level security;
 
--- organizations
--- create policy org_select on public.organizations
---   for select using (
---     exists (
---       select 1 from public.memberships m
---       where m.organization_id = organizations.id
---       and m.user_id = auth.uid()
---     )
---   );
+-- Helper predicates
+create or replace function public.is_org_member(org_id uuid)
+returns boolean
+language sql
+stable
+as $$
+  select exists(
+    select 1
+    from public.memberships m
+    where m.organization_id = org_id
+      and m.user_id = auth.uid()
+  );
+$$;
 
--- profiles
--- create policy profile_self_select on public.profiles
---   for select using (id = auth.uid());
+grant execute on function public.is_org_member(uuid) to authenticated;
+grant execute on function public.is_org_member(uuid) to anon;
 
--- memberships
--- create policy memberships_org_scope on public.memberships
---   for all using (
---     exists (
---       select 1 from public.memberships m
---       where m.organization_id = memberships.organization_id
---       and m.user_id = auth.uid()
---     )
---   );
+create or replace function public.is_org_admin(org_id uuid)
+returns boolean
+language sql
+stable
+as $$
+  select exists(
+    select 1
+    from public.memberships m
+    where m.organization_id = org_id
+      and m.user_id = auth.uid()
+      and m.role in ('owner','admin')
+  );
+$$;
 
--- leads
--- create policy leads_org_scope on public.leads
---   for all using (
---     exists (
---       select 1 from public.memberships m
---       where m.organization_id = leads.organization_id
---       and m.user_id = auth.uid()
---     )
---   );
+grant execute on function public.is_org_admin(uuid) to authenticated;
+grant execute on function public.is_org_admin(uuid) to anon;
 
--- conversations
--- create policy conversations_org_scope on public.conversations
---   for all using (
---     exists (
---       select 1 from public.memberships m
---       where m.organization_id = conversations.organization_id
---       and m.user_id = auth.uid()
---     )
---   );
+-- Organizations
+-- Read: only members.
+-- Insert: allow authenticated users to create orgs from the app.
+-- Update/Delete: only admin (owner/admin) members.
+drop policy if exists org_select on public.organizations;
+create policy org_select
+  on public.organizations
+  for select
+  using (public.is_org_member(organizations.id));
 
--- messages
--- create policy messages_org_scope on public.messages
---   for all using (
---     exists (
---       select 1 from public.memberships m
---       where m.organization_id = messages.organization_id
---       and m.user_id = auth.uid()
---     )
---   );
+drop policy if exists org_insert_authenticated on public.organizations;
+create policy org_insert_authenticated
+  on public.organizations
+  for insert
+  with check (auth.uid() is not null);
 
--- deals
--- create policy deals_org_scope on public.deals
---   for all using (
---     exists (
---       select 1 from public.memberships m
---       where m.organization_id = deals.organization_id
---       and m.user_id = auth.uid()
---     )
---   );
+drop policy if exists org_update_admin on public.organizations;
+create policy org_update_admin
+  on public.organizations
+  for update
+  using (public.is_org_admin(organizations.id))
+  with check (public.is_org_admin(organizations.id));
 
--- deal_stage_history
--- create policy deal_stage_history_org_scope on public.deal_stage_history
---   for all using (
---     exists (
---       select 1 from public.memberships m
---       where m.organization_id = deal_stage_history.organization_id
---       and m.user_id = auth.uid()
---     )
---   );
+drop policy if exists org_delete_admin on public.organizations;
+create policy org_delete_admin
+  on public.organizations
+  for delete
+  using (public.is_org_admin(organizations.id));
 
--- deal_objections
--- create policy deal_objections_org_scope on public.deal_objections
---   for all using (
---     exists (
---       select 1 from public.memberships m
---       where m.organization_id = deal_objections.organization_id
---       and m.user_id = auth.uid()
---     )
---   );
+-- Profiles
+-- Users can manage their own profile row.
+drop policy if exists profile_self_select on public.profiles;
+create policy profile_self_select
+  on public.profiles
+  for select
+  using (profiles.id = auth.uid());
+
+drop policy if exists profile_self_insert on public.profiles;
+create policy profile_self_insert
+  on public.profiles
+  for insert
+  with check (profiles.id = auth.uid());
+
+drop policy if exists profile_self_update on public.profiles;
+create policy profile_self_update
+  on public.profiles
+  for update
+  using (profiles.id = auth.uid())
+  with check (profiles.id = auth.uid());
+
+-- Memberships
+-- Read: any member of org can see memberships.
+-- Write: only admins can add/update/remove memberships.
+drop policy if exists memberships_org_select on public.memberships;
+create policy memberships_org_select
+  on public.memberships
+  for select
+  using (public.is_org_member(memberships.organization_id));
+
+drop policy if exists memberships_admin_insert on public.memberships;
+create policy memberships_admin_insert
+  on public.memberships
+  for insert
+  with check (public.is_org_admin(memberships.organization_id));
+
+drop policy if exists memberships_admin_update on public.memberships;
+create policy memberships_admin_update
+  on public.memberships
+  for update
+  using (public.is_org_admin(memberships.organization_id))
+  with check (public.is_org_admin(memberships.organization_id));
+
+drop policy if exists memberships_admin_delete on public.memberships;
+create policy memberships_admin_delete
+  on public.memberships
+  for delete
+  using (public.is_org_admin(memberships.organization_id));
+
+-- Org-scoped tables (member gate for all operations)
+-- Leads
+drop policy if exists leads_org_scope on public.leads;
+create policy leads_org_scope
+  on public.leads
+  for all
+  using (public.is_org_member(leads.organization_id))
+  with check (public.is_org_member(leads.organization_id));
+
+-- Conversations
+drop policy if exists conversations_org_scope on public.conversations;
+create policy conversations_org_scope
+  on public.conversations
+  for all
+  using (public.is_org_member(conversations.organization_id))
+  with check (public.is_org_member(conversations.organization_id));
+
+-- Messages
+drop policy if exists messages_org_scope on public.messages;
+create policy messages_org_scope
+  on public.messages
+  for all
+  using (public.is_org_member(messages.organization_id))
+  with check (public.is_org_member(messages.organization_id));
+
+-- Deals
+drop policy if exists deals_org_scope on public.deals;
+create policy deals_org_scope
+  on public.deals
+  for all
+  using (public.is_org_member(deals.organization_id))
+  with check (public.is_org_member(deals.organization_id));
+
+-- Deal stage history
+drop policy if exists deal_stage_history_org_scope on public.deal_stage_history;
+create policy deal_stage_history_org_scope
+  on public.deal_stage_history
+  for all
+  using (public.is_org_member(deal_stage_history.organization_id))
+  with check (public.is_org_member(deal_stage_history.organization_id));
+
+-- Deal objections
+drop policy if exists deal_objections_org_scope on public.deal_objections;
+create policy deal_objections_org_scope
+  on public.deal_objections
+  for all
+  using (public.is_org_member(deal_objections.organization_id))
+  with check (public.is_org_member(deal_objections.organization_id));
+
 
 -- =====================================================
 -- AUTOMATIONS ENGINE (Sprint 6 scaffold)
