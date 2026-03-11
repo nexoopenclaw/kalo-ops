@@ -29,14 +29,25 @@ Objetivo: poder desplegar y validar que la app está **keys-ready**, webhooks fu
 
 ### Deploy smoke test (recomendado)
 
+Local (corre checks directos con env vars locales):
+
 ```bash
 npm run smoke:go-live
 # machine-readable for CI logs
 npm run smoke:go-live -- --json
 ```
 
+Remote (pega al deployment y valida `/api/health/go-live`):
+
+```bash
+APP_URL=https://<tu-dominio> npm run smoke:go-live
+# o
+npm run smoke:go-live -- --url https://<tu-dominio>
+```
+
 Notas:
 - Requiere env vars reales (ver `.env.example`).
+- Si `HEALTH_ENDPOINT_TOKEN` está seteado en el deploy, el smoke manda `x-health-token` automáticamente.
 - Falla con exit code 1 si algo crítico no está ok.
 
 Opcional (recomendado en prod): proteger `GET /api/health/config` con header.
