@@ -60,7 +60,29 @@ Validación esperada para go-live:
 - Endpoint: `POST /api/webhooks/meta`
 - Validar: firma y enrutado de tenant.
 
-## 4) Post-deploy
+## 4) Worker cron (reliability / retries / digests)
+
+La app tiene un worker “light” que procesa:
+- retries de webhooks (retry queue)
+- automations
+- digests
+
+### Endpoint (cron)
+- `POST /api/cron/worker-tick` (opcional `?orgId=<id>`)
+- Requiere:
+  - env `CRON_JOB_TOKEN`
+  - header `x-cron-token: <CRON_JOB_TOKEN>`
+
+Recomendación: configurar un cron externo (Vercel Cron / GitHub Actions / cualquier scheduler) para llamar este endpoint cada 1-5 min.
+
+Validación rápida:
+```bash
+curl -X POST "$APP_URL/api/cron/worker-tick" \
+  -H "x-cron-token: $CRON_JOB_TOKEN"
+```
+
+## 5) Post-deploy
 - Confirmar que la app compila (`npm run build`).
 - Confirmar que los endpoints de health están accesibles.
 - Revisar logs de webhooks (Stripe/Calendly/Meta) por 10-15 min y verificar que no hay `INVALID_SIGNATURE` / `NOT_CONFIGURED`.
+- Si usás cron: verificar que `POST /api/cron/worker-tick` está corriendo y no devuelve 5xx.
